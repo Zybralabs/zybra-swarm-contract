@@ -1,36 +1,42 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity 0.8.25;
 
-import { IDotcManager } from "./IDotcManager.sol";
-import { Asset, AssetType, EscrowCallType, ValidityType, OfferStruct, DotcOffer } from "../structures/DotcStructuresV2.sol";
+import { IERC20, IERC721, IERC1155 } from "../exports/ExternalExports.sol";
+import { Asset, DotcOffer, OfferStruct } from "../structures/DotcStructuresV2.sol";
 
 interface IDotcV2 {
-   
+    
 
-    // Function Definitions
+    /// External functions
+
     function makeOffer(
         Asset calldata depositAsset,
         Asset calldata withdrawalAsset,
         OfferStruct calldata offer
     ) external;
 
-    function takeOffer(uint256 offerId, uint256 amountToSend) external;
+    function takeOfferFixed(
+        uint256 offerId,
+        uint256 withdrawalAmountPaid,
+        address affiliate
+    ) external;
+
+    function takeOfferDynamic(
+        uint256 offerId,
+        uint256 withdrawalAmountPaid,
+        uint256 maximumDepositToWithdrawalRate,
+        address affiliate
+    ) external;
+
+    function updateOffer(uint256 offerId, OfferStruct calldata updatedOffer) external;
 
     function cancelOffer(uint256 offerId) external;
 
-    function updateOffer(
-        uint256 offerId,
-        uint256 newAmount,
-        OfferStruct calldata updatedOffer
-    ) external returns (bool status);
+    function changeEscrow(DotcEscrowV2 _escrow) external;
 
-    function changeManager(IDotcManager _manager) external returns (bool status);
+    /// View functions
+    function currentOfferId() external view returns (uint256);
 
-    function getOffersFromAddress(address account) external view returns (uint256[] memory);
+    function allOffers(uint256 offerId) external view returns (DotcOffer memory);
 
-    function getOfferOwner(uint256 offerId) external view returns (address maker);
-
-    function getOffer(uint256 offerId) external view returns (DotcOffer memory offer);
-
-    function supportsInterface(bytes4 interfaceId) external view returns (bool);
 }
