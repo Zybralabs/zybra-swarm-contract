@@ -22,7 +22,7 @@ interface IPoolManager {
     ) external view returns (uint128 price, uint64 computedAt);
 }
 
-abstract contract ZybraVaultBase is Ownable, ReentrancyGuard {
+contract Lzybravault is Ownable, ReentrancyGuard {
 
     using SafeERC20 for IERC20;
 
@@ -73,20 +73,16 @@ abstract contract ZybraVaultBase is Ownable, ReentrancyGuard {
         address indexed provider,
         address indexed keeper,
         address indexed onBehalfOf,
-        uint256 eusdamount,
         uint256 LiquidateAssetAmount,
-        uint256 keeperReward,
-        bool superLiquidation
+        uint256 keeperReward
     );
     constructor(
-        address _priceFeedAddress,
         address _collateralAsset,
         address _lzybra,
         address _dotcv2
     ) {
         LZYBRA = ILZYBRA(_lzybra);
         DOTCV2 = IDotcV2(_dotcv2);
-        priceFeed = AggregatorV3Interface(_priceFeedAddress);
         collateralAsset = IERC20(_collateralAsset);
     }
 
@@ -99,11 +95,11 @@ abstract contract ZybraVaultBase is Ownable, ReentrancyGuard {
      * - `withdrawalAsset` withdrawal Asset details in Asset struct
      * - `offer` offers details in OfferStruct struct
      */
- function Deposit(
+ function deposit(
         uint256 assetAmount,
         Asset calldata withdrawalAsset,
         OfferStruct calldata offer
-    ) external virtual {
+    ) external virtual nonReentrant {
         require(assetAmount > 0, "Deposit amount must be greater than 0");
 
         // Transfer collateral to the contract
@@ -133,7 +129,7 @@ abstract contract ZybraVaultBase is Ownable, ReentrancyGuard {
     }
 
 
-    function mintLZYBRA(uint256 mintAmount) external virtual {
+    function mintLZYBRA(uint256 mintAmount) internal virtual {
         uint256 assetPrice = getAssetPrice(withdrawalAsset.assetAddress);
         _mintLZYBRA(msg.sender, msg.sender, mintAmount, assetPrice);
     }
@@ -152,7 +148,14 @@ abstract contract ZybraVaultBase is Ownable, ReentrancyGuard {
      */
     function withdraw(uint256 offerId, uint256 asset_amount) external virtual {
         require(asset_amount != 0, "ZA");
-        _withdrawTakeOffer(msg.sender, offerId,asset_amount);
+        _withdrawTakeOfferFixed(msg.sender, offerId,asset_amount);
+    }
+
+
+
+    function withdraw(uint256 offerId, uint256 maximumDepositToWithdrawalRate, uint256 asset_amount) external virtual {
+        require(asset_amount != 0, "ZA");
+        _withdrawTakeOfferDynamic(msg.sender, offerId,asset_amount, maximumDepositToWithdrawalRate,msg.sender);
     }
 
     
@@ -169,65 +172,71 @@ abstract contract ZybraVaultBase is Ownable, ReentrancyGuard {
 // remaining: fix the liquidation function..
 
     function liquidation(
-        address provider,
-        address onBehalfOf,
-        uint256 assetAmount
-    ) external virtual {
-        uint256 assetPrice = getAssetPrice(withdrawalAsset.assetAddress);
-        uint256 onBehalfOfCollateralRatio = (UserAsset[
-            onBehalfOf
-        ][depositAsset] *
-            assetPrice *
-            100) / getBorrowed(onBehalfOf);
-        require(
-            onBehalfOfCollateralRatio <
-                configurator.getBadCollateralRatio(address(this)),
-            "Borrowers collateral ratio should below badCollateralRatio"
-        );
+    address provider,
+    address onBehalfOf,
+    uint256 assetAmount,
+    Asset depositAsset
+) external virtual {
+    // Fetch asset price and collateral ratio
+    uint256 assetPrice = getAssetPrice(withdrawalAsset.assetAddress);
+    uint256 depositAddress = depositAsset.assetAddress;
 
-        require(
-            assetAmount * 2 <= UserDepositedCollatAsset[onBehalfOf],
-            "a max of 50% collateral can be liquidated"
-        );
-        require(
-            LZYBRA.allowance(provider, address(this)) != 0 ||
-                msg.sender == provider,
-            "provider should authorize to provide liquidation LZYBRA"
-        );
-        uint256 LZYBRAAmount = (assetAmount * assetPrice) / 1e18;
+    // Calculate collateral ratio
+    uint256 collateralValue = UserAsset[onBehalfOf][depositAddress] * assetPrice;
+    uint256 borrowedValue = getBorrowed(onBehalfOf);
+    uint256 onBehalfOfCollateralRatio = (collateralValue * 100) / borrowedValue;
 
-        _repay(provider, onBehalfOf, LZYBRAAmount);
-        uint256 reducedAsset = assetAmount;
-        if (
-            onBehalfOfCollateralRatio > 1e20 &&
-            onBehalfOfCollateralRatio < 11e19
-        ) {
-            reducedAsset = (assetAmount * onBehalfOfCollateralRatio) / 1e20;
-        }
-        if (onBehalfOfCollateralRatio >= 11e19) {
-            reducedAsset = (assetAmount * 11) / 10;
-        }
-        uint256 reward2keeper;
-        uint256 keeperRatio = configurator.vaultKeeperRatio(address(this));
-        if (
-            msg.sender != provider &&
-            onBehalfOfCollateralRatio >= 1e20 + keeperRatio * 1e18
-        ) {
-            reward2keeper = (assetAmount * keeperRatio) / 100;
-            collateralAsset.safeTransfer(msg.sender, reward2keeper);
-        }
-        collateralAsset.safeTransfer(provider, reducedAsset - reward2keeper);
-        emit LiquidationRecord(
-            provider,
-            msg.sender,
-            onBehalfOf,
-            LZYBRAAmount,
-            reducedAsset,
-            reward2keeper,
-            false,
-            block.timestamp
-        );
+    // Check if collateral ratio falls below the badCollateralRatio threshold
+    require(
+        onBehalfOfCollateralRatio < configurator.getBadCollateralRatio(address(this)),
+        "Borrower's collateral ratio should be below badCollateralRatio"
+    );
+
+    // Check if the provider is authorized to perform liquidation
+    require(
+        LZYBRA.allowance(provider, address(this)) != 0 || msg.sender == provider,
+        "Provider should authorize liquidation LZYBRA"
+    );
+
+    // Calculate LZYBRA amount to repay
+    uint256 LZYBRAAmount = (assetAmount * assetPrice) / 1e18;
+
+    // Redeem user's collateral and repay their debt
+    _repay(provider, onBehalfOf, calc_share(assetAmount, depositAddress, provider));
+
+    // Adjust the asset amount based on the collateral ratio
+    uint256 reducedAsset = assetAmount;
+    if (onBehalfOfCollateralRatio > 1e20 && onBehalfOfCollateralRatio < 11e19) {
+        reducedAsset = (assetAmount * onBehalfOfCollateralRatio) / 1e20;
     }
+    if (onBehalfOfCollateralRatio >= 11e19) {
+        reducedAsset = (assetAmount * 11) / 10;
+    }
+
+    // Calculate rewards for the keeper (provider)
+    uint256 keeperRatio = configurator.vaultKeeperRatio(address(this));
+    uint256 reward2keeper;
+    if (
+        msg.sender != provider && 
+        onBehalfOfCollateralRatio >= (1e20 + keeperRatio * 1e18)
+    ) {
+        reward2keeper = (assetAmount * keeperRatio) / 100;
+        collateralAsset.safeTransfer(msg.sender, reward2keeper); // Reward keeper
+    }
+
+    // Transfer the remaining reduced asset to the provider
+    collateralAsset.safeTransfer(provider, reducedAsset - reward2keeper);
+
+    // Emit liquidation event
+    emit LiquidationRecord(
+        provider,
+        msg.sender,
+        onBehalfOf,
+        LZYBRAAmount,
+        reducedAsset
+    );
+}
+
 
     /**
      * @dev Refresh LBR reward before adding providers debt. Refresh Zybra generated service fee before adding totalSupply. Check providers collateralRatio cannot below `safeCollateralRatio`after minting.
@@ -351,7 +360,8 @@ function _withdrawTakeOfferDynamic(
     }
 
     // Calculate receiving amount based on offer conditions
-    //remaining: logic for receivedAmoung
+    //remaining: logic for receivedAmount
+
     uint256 receivingAmount = ;
 
     // Require valid amount is received and deduct the fee inline
@@ -417,14 +427,10 @@ function _withdrawTakeOfferDynamic(
 
 
 
-    function calc_share(uint256 amount, uint256 asset) internal view returns (uint256) {
-        return (borrowed[msg.sender] * (amount / UserAsset[msg.sender][asset]));
+    function calc_share(uint256 amount, uint256 asset,uint256 user) internal view returns (uint256) {
+        return (borrowed[user] * (amount / UserAsset[user][asset]));
     }
 
-    function getCollateralAssetPrice() public view returns (uint256) {
-        (, int256 price, , , ) = priceFeed.latestRoundData();
-        return uint256(price);
-    }
 
     function getAssetPrice(Asset calldata depositAsset,
         Asset calldata withdrawalAsset,

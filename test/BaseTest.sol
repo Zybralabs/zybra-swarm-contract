@@ -3,50 +3,46 @@ pragma solidity 0.8.26;
 pragma abicoder v2;
 
 // core contracts/Zybra
-import {Root} from "../contracts/Zybra/Root.sol";
-import {InvestmentManager} from "../contracts/Zybra/InvestmentManager.sol";
-import {PoolManager} from "../contracts/Zybra/PoolManager.sol";
-import {Escrow} from "../contracts/Zybra/Escrow.sol";
-import {ERC7540VaultFactory} from "../contracts/Zybra/factories/ERC7540VaultFactory.sol";
-import {TrancheFactory} from "../contracts/Zybra/factories/TrancheFactory.sol";
-import {ERC7540Vault} from "../contracts/Zybra/ERC7540Vault.sol";
-import {Tranche} from "../contracts/Zybra/token/Tranche.sol";
-import {ITranche} from "../contracts/Zybra/interfaces/token/ITranche.sol";
-import {ERC20} from "../contracts/Zybra/token/ERC20.sol";
-import {Gateway} from "../contracts/Zybra/gateway/Gateway.sol";
-import {RestrictionManager} from "../contracts/Zybra/token/RestrictionManager.sol";
-import {MessagesLib} from "../contracts/Zybra/libraries/MessagesLib.sol";
+import {Root} from "../src/Root.sol";
+import {Escrow} from "../src/Escrow.sol";
+import {ERC20} from "../src/token/ERC20.sol";
 import {Deployer} from "../../script/Deployer.s.sol";
 import {MockSafe} from "test/mocks/MockSafe.sol";
-import "contracts/Zybra/interfaces/IERC20.sol";
-import {LzybraVault} from "../contracts/Zybra/pools/LzybraVault.sol";
-import {ZybraConfigurator} from "../contracts/Zybra/configuration/ZybraConfigurator.sol";
-import {PoolManager} from "../contracts/Zybra/PoolManager.sol";
-import {Lzybra} from "../contracts/Zybra/token/LZYBRA.sol";
-import {MessagesLib} from "../../../contracts/Zybra/libraries/MessagesLib.sol";
+import "../src/interfaces/IERC20.sol";
+import {Lzybravault} from "../src/LZybraSwarmVaultV1.sol";
+import {Lzybra} from "../src/token/LZYBRA.sol";
+import "../src/AssetToken.sol";
+import "../src/AssetTokenFactory.sol";
+import "../src/AssetTokenData.sol";
+import "../src/DotcManagerV2.sol";
+import "../src/DotcV2.sol";
+
+import {MessagesLib} from "../../../src/libraries/MessagesLib.sol";
 // mocks
-import {MockCentrifugeChain} from "../test/mocks/MockCentrifugeChain.sol";
-import {mockChainlink} from "../contracts/mocks/chainLinkMock.sol";
+import {mockChainlink} from "../src/mocks/chainLinkMock.sol";
 import {MockGasService} from "../../test/mocks/MockGasService.sol";
-import {MockAdapter} from "../../test/mocks/MockAdapter.sol";
 
 // test env
 import "forge-std/Test.sol";
 
 contract BaseTest is Deployer, Test {
-    MockCentrifugeChain centrifugeChain;
-    MockGasService mockedGasService;
+    DotcV2 dotcV2;
+    DotcManagerV2 dotcManagerV2;
     MockAdapter adapter1;
     MockAdapter adapter2;
+    MockAdapter adapter2;
+    AssetTokenData assetTokenData;
+    AssetTokenFactory assetTokenFactory;
     MockAdapter adapter3;
     address[] testAdapters;
-    ERC20 public erc20;
-    LzybraVault public Lzybravault;
-    mockChainlink public ChainLinkMock;
+    ERC20 public USDC;
+    LzybraVault public lzybravault;
     Lzybra public lzybra;
-    ZybraConfigurator public configurator;
     address self = address(this);
+    address fee = makeAddr("fee");
     address investor = makeAddr("investor");
+    address issuer = makeAddr("issuer");
+    address guardian = makeAddr("guardian");
     address nonMember = makeAddr("nonMember");
     address randomUser = makeAddr("randomUser");
     uint128 constant MAX_UINT128 = type(uint128).max;
@@ -87,24 +83,20 @@ contract BaseTest is Deployer, Test {
         // remove deployer access
         // removeDeployerAccess(address(adapter)); // need auth permissions in tests
 
-        centrifugeChain = new MockCentrifugeChain(testAdapters);
         mockedGasService = new MockGasService();
-        erc20 = _newErc20("X's Dollar", "USDX", 6);
+        USDC = _newErc20("X's Dollar", "USDX", 6);
+        assetTokenData = new AssetTokenData("0000000000000000000000000000000000000000000000000000000000000063");
+        assetTokenFactory = new AssetTokenFactory(address(assetTokenData));
+        asset1 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"NVIDIA","NVIDIA");
+        asset2 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"MCSF","MCSF");
+        asset3 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"TESLA","TESLA");
         lzybra = new Lzybra("Lzybra", "LZYB");
-      
-        configurator = new ZybraConfigurator(address(this), address(erc20));
+        dotcManagerV2 = new DotcManagerV2(fee);
+        dotcV2 = new DotcV2(address(dotcManagerV2));
 
-
-
-
-    
-        assertEq(configurator.redemptionFee(), 50);  // Check initial values
-        assertEq(configurator.flashloanFee(), 500);
-        ChainLinkMock = new mockChainlink();
-        // configurator.initGTialize(address(this), address(erc20));
-        Lzybravault = new LzybraVault(address(configurator), address(ChainLinkMock), address(erc20), address(lzybra),address(poolManager), address(investmentManager));
-        configurator.setMintVaultMaxSupply(address(Lzybravault),200000000 *10**18);
-        lzybra.grantMintRole(address(Lzybravault));
+        // configurator.initGTialize(address(this), USDC);
+        lzybravault = new LzybraVault(address(lzybra),address(dotcV2),address(USDC));
+        lzybra.grantMintRole(address(lzybravault));
         gateway.file("adapters", testAdapters);
         gateway.file("gasService", address(mockedGasService));
         vm.deal(address(gateway), GATEWAY_INITIAL_BALACE);
@@ -113,42 +105,15 @@ contract BaseTest is Deployer, Test {
         mockedGasService.setReturn("shouldRefuel", true);
        
         // Label contracts/Zybra
-        vm.label(address(root), "Root");
-        vm.label(address(investmentManager), "InvestmentManager");
-        vm.label(address(poolManager), "PoolManager");
-        vm.label(address(gateway), "Gateway");
-        vm.label(address(adapter1), "MockAdapter1");
-        vm.label(address(adapter2), "MockAdapter2");
-        vm.label(address(adapter3), "MockAdapter3");
-        vm.label(address(erc20), "ERC20");
-        vm.label(address(Lzybravault), "Lzybravault");
-        vm.label(address(configurator), "configurator");
-        vm.label(address(centrifugeChain), "CentrifugeChain");
-        vm.label(address(router), "CentrifugeRouter");
-        vm.label(address(gasService), "GasService");
-        vm.label(address(mockedGasService), "MockGasService");
-        vm.label(address(escrow), "Escrow");
-        vm.label(address(routerEscrow), "RouterEscrow");
-        vm.label(address(guardian), "Guardian");
-        vm.label(address(poolManager.trancheFactory()), "TrancheFactory");
-        vm.label(address(poolManager.vaultFactory()), "ERC7540VaultFactory");
+
+        vm.label(address(USDC), "ERC20");
+        vm.label(address(lzybravault), "Lzybravault");
+        
 
         // Exclude predeployed contracts/Zybra from invariant tests by default
-        excludeContract(address(root));
-        excludeContract(address(investmentManager));
-        excludeContract(address(poolManager));
-        excludeContract(address(gateway));
-        excludeContract(address(erc20));
-        excludeContract(address(centrifugeChain));
-        excludeContract(address(router));
-        excludeContract(address(adapter1));
-        excludeContract(address(adapter2));
-        excludeContract(address(adapter3));
-        excludeContract(address(escrow));
-        excludeContract(address(routerEscrow));
-        excludeContract(address(guardian));
-        excludeContract(address(poolManager.trancheFactory()));
-        excludeContract(address(poolManager.vaultFactory()));
+        excludeContract(address(dotcManagerV2));
+        excludeContract(address(dotcV2));
+  
     }
    
     function testSetup()public virtual{
@@ -195,11 +160,11 @@ contract BaseTest is Deployer, Test {
         bytes16 trancheId,
         uint128 asset
     ) public returns (address) {
-        return deployVault(poolId, decimals, restrictionManager, tokenName, tokenSymbol, trancheId, asset, address(erc20));
+        return deployVault(poolId, decimals, restrictionManager, tokenName, tokenSymbol, trancheId, asset, address(USDC));
     }
 
     function deploySimpleVault() public returns (address) {
-        return deployVault(5, 6, restrictionManager, "name", "symbol", bytes16(bytes("1")), defaultAssetId, address(erc20));
+        return deployVault(5, 6, restrictionManager, "name", "symbol", bytes16(bytes("1")), defaultAssetId, address(USDC));
     }
 
     function deposit(address _vault, address _investor, uint256 amount,uint256 lzybra_amount) public {
@@ -218,7 +183,7 @@ contract BaseTest is Deployer, Test {
         console.log("withdraw====>");
         Lzybravault.requestDeposit(amount, _vault);
         // trigger executed collectInvest
-        uint128 assetId = poolManager.assetToId(address(erc20)); // retrieve assetId
+        uint128 assetId = poolManager.assetToId(USDC); // retrieve assetId
         centrifugeChain.isFulfilledDepositRequest(
             vault.poolId(), vault.trancheId(), bytes32(bytes20(_investor)), assetId, uint128(amount), uint128(amount)
         );
@@ -293,6 +258,6 @@ contract BaseTest is Deployer, Test {
     }
 
     function addressAssumption(address user) public view returns (bool) {
-        return (user != address(0) && user != address(erc20) && user.code.length == 0);
+        return (user != address(0) && user != USDC && user.code.length == 0);
     }
 }

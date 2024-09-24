@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.16;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/SafeERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155HolderUpgradeable.sol";
+import "@openzeppelin/contracts/interfaces/IERC20.sol";
+ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
@@ -20,7 +20,7 @@ contract ActionManager is
     ERC1155HolderUpgradeable,
     ReentrancyGuardUpgradeable
 {
-    using SafeERC20Upgradeable for IERC20Upgradeable;
+    using SafeERC20 for IERC20;
 
     /**
      * @dev Address of BFactory module.
@@ -314,7 +314,7 @@ contract ActionManager is
         uint256[] memory _amounts
     ) private returns (bool) {
         for (uint256 i = 0; i < _tokens.length; i++) {
-            IERC20Upgradeable(_tokens[i]).safeTransferFrom(_from, _to, _amounts[i]);
+            IERC20(_tokens[i]).safeTransferFrom(_from, _to, _amounts[i]);
         }
         return true;
     }
@@ -333,7 +333,7 @@ contract ActionManager is
     ) private returns (bool) {
         bool returnedValue = false;
         for (uint256 i = 0; i < _tokens.length; i++) {
-            returnedValue = IERC20Upgradeable(_tokens[i]).approve(_spender, _amounts[i]);
+            returnedValue = IERC20(_tokens[i]).approve(_spender, _amounts[i]);
             require(returnedValue, "Approve failed");
         }
         return true;
@@ -601,7 +601,7 @@ contract ActionManager is
         _approveTokenTransfer(poolAndTokenAddressArr, xTokenWrapperAddress, balancePoolTokenArr);
         _wrapToken(poolAndTokenAddressArr, balancePoolTokenArr);
 
-        balanceToken = IERC20Upgradeable(poolXTokenAddress).balanceOf(address(this));
+        balanceToken = IERC20(poolXTokenAddress).balanceOf(address(this));
         uint256[] memory balanceXPoolTokenArr = _convertToArrayOfOneUint(balanceToken);
 
         _approveTokenTransfer(poolXTokenAddressArr, address(this), balanceXPoolTokenArr);
