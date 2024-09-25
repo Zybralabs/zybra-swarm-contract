@@ -22,7 +22,7 @@ interface IPoolManager {
     ) external view returns (uint128 price, uint64 computedAt);
 }
 
-contract Lzybravault is Ownable, ReentrancyGuard {
+contract LzybraVault is Ownable, ReentrancyGuard {
 
     using SafeERC20 for IERC20;
 
@@ -95,11 +95,13 @@ contract Lzybravault is Ownable, ReentrancyGuard {
      * - `withdrawalAsset` withdrawal Asset details in Asset struct
      * - `offer` offers details in OfferStruct struct
      */
- function deposit(
+
+
+    function deposit(
         uint256 assetAmount,
         Asset calldata withdrawalAsset,
-        OfferStruct calldata offer
-    ) external virtual nonReentrant {
+        uint256 calldata offerId
+    ) internal virtual {
         require(assetAmount > 0, "Deposit amount must be greater than 0");
 
         // Transfer collateral to the contract
@@ -118,6 +120,40 @@ contract Lzybravault is Ownable, ReentrancyGuard {
 
         // Create the offer in DOTCV2
         DOTCV2.makeOffer(asset, withdrawalAsset, offer);
+
+        // Fetch the price of the withdrawal asset and the exchange rate
+        (uint256 depositToWithdrawalRate, ) = getAssetPrice(asset, withdrawalAsset, offer.offerPrice);
+
+        // Mint LZYBRA tokens based on the asset price and deposit amount
+        _mintLZYBRA(msg.sender, assetAmount, depositToWithdrawalRate);
+
+        emit DepositAsset(msg.sender, address(collateralAsset), assetAmount, block.timestamp);
+    }
+
+
+    function deposit(
+        uint256 assetAmount,
+        Asset calldata withdrawalAsset,
+        OfferStruct calldata offer
+    ) internal virtual {
+        require(assetAmount > 0, "Deposit amount must be greater than 0");
+
+        // Transfer collateral to the contract
+        collateralAsset.safeTransferFrom(msg.sender, address(this), assetAmount);
+
+        // Approve the DOTC contract to handle the transferred amount
+        collateralAsset.approve(address(DOTCV2), assetAmount);
+
+        // Create an Asset struct for the deposit
+        Asset memory asset = Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: address(collateralAsset),
+            amount: assetAmount,
+            reserved: 0
+        });
+
+        // Create the offer in DOTCV2
+        DOTCV2.takeOfferFixed(offerId, withdrawalAmountPaid, affiliate);(asset, withdrawalAsset, offer);
 
         // Fetch the price of the withdrawal asset and the exchange rate
         (uint256 depositToWithdrawalRate, ) = getAssetPrice(asset, withdrawalAsset, offer.offerPrice);
@@ -359,16 +395,16 @@ function _withdrawTakeOfferDynamic(
         _checkHealth(_provider, withdrawalAssetAddr, assetRate);
     }
 
-    // Calculate receiving amount based on offer conditions
-    //remaining: logic for receivedAmount
+    // Call external function at the end of state manipulations
+    DOTCV2.takeOfferDynamic(offerId, amountToSend,maximumDepositToWithdrawalRate, _provider);
 
-    uint256 receivingAmount = ;
+ // Calculate receiving amount based on offer conditions
+    DotcOffer memory new_offer = DOTCV2.allOffers(offerId);
+    //USDC Asset
+    uint256 receivingAmount = offer.depositAsset.amount - new_offer.depositAsset.amount;
 
     // Require valid amount is received and deduct the fee inline
     require(receivingAmount > fee, "TZA");
-
-    // Call external function at the end of state manipulations
-    DOTCV2.takeOfferDynamic(offerId, amountToSend,maximumDepositToWithdrawalRate, _provider);
 
     // Calculate and repay LZYBRA
     _repay(msg.sender, onBehalfOf, calc_share(amountToSend));

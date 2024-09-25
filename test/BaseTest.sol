@@ -9,7 +9,7 @@ import {ERC20} from "../src/token/ERC20.sol";
 import {Deployer} from "../../script/Deployer.s.sol";
 import {MockSafe} from "test/mocks/MockSafe.sol";
 import "../src/interfaces/IERC20.sol";
-import {Lzybravault} from "../src/LZybraSwarmVaultV1.sol";
+import {LzybraVault} from "../src/LZybraSwarmVaultV1.sol";
 import {Lzybra} from "../src/token/LZYBRA.sol";
 import "../src/AssetToken.sol";
 import "../src/AssetTokenFactory.sol";
@@ -30,12 +30,19 @@ contract BaseTest is Deployer, Test {
     DotcManagerV2 dotcManagerV2;
     MockAdapter adapter1;
     MockAdapter adapter2;
+    mockChainlink public ChainLinkMockUSDC;
+    mockChainlink public ChainLinkMockNVIDIA;
+    mockChainlink public ChainLinkMockMSCRF;
     MockAdapter adapter2;
     AssetTokenData assetTokenData;
+    AssetToken asset1;
+    AssetToken asset2;
+    AssetToken asset3;
     AssetTokenFactory assetTokenFactory;
     MockAdapter adapter3;
     address[] testAdapters;
     ERC20 public USDC;
+    
     LzybraVault public lzybravault;
     Lzybra public lzybra;
     address self = address(this);
@@ -43,6 +50,7 @@ contract BaseTest is Deployer, Test {
     address investor = makeAddr("investor");
     address issuer = makeAddr("issuer");
     address guardian = makeAddr("guardian");
+    address user = makeAddr("user");
     address nonMember = makeAddr("nonMember");
     address randomUser = makeAddr("randomUser");
     uint128 constant MAX_UINT128 = type(uint128).max;
@@ -91,6 +99,19 @@ contract BaseTest is Deployer, Test {
         asset2 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"MCSF","MCSF");
         asset3 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"TESLA","TESLA");
         lzybra = new Lzybra("Lzybra", "LZYB");
+
+
+
+
+
+        ChainLinkMockUSDC = new mockChainlink();
+        ChainLinkMockNVIDIA = new mockChainlink();
+        ChainLinkMockMSCRF = new mockChainlink();
+
+        ChainLinkMockUSDC.setPrice(1e18);
+        ChainLinkMockNVIDIA.setPrice(8e18);
+        ChainLinkMockMSCRF.setPrice(10e18);
+
         dotcManagerV2 = new DotcManagerV2(fee);
         dotcV2 = new DotcV2(address(dotcManagerV2));
 
