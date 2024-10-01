@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.25;
+pragma solidity 0.8.19;
 
 import { Initializable, Receiver, SafeTransferLib, IERC721, IERC1155 } from "./exports/ExternalExports.sol";
 

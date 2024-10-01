@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 
 import {Auth} from "../Auth.sol";
 import {EIP712Lib} from "../libraries/EIP712Lib.sol";
 import {SignatureLib} from "../libraries/SignatureLib.sol";
-import {IERC20, IERC20Metadata, IERC20Permit} from "../interfaces/IERC20.sol";
+import {IERC20} from "../interfaces/IERC20.sol";
+import { IERC20Permit} from "lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import {IERC20Metadata} from "lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /// @title  ERC20
 /// @notice Standard ERC-20 implementation, with mint/burn functionality and permit logic.

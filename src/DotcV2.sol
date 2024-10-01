@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.25;
+pragma solidity 0.8.19;
 
-import { Initializable, Receiver, SafeTransferLib, FixedPointMathLib, IERC721, IERC1155, IERC165 } from "./exports/ExternalExports.sol";
+import { Initializable, Receiver, SafeTransferLib, FixedPointMathLib, IERC721, IERC1155 } from "./exports/ExternalExports.sol";
 
 import { AssetHelper } from "./helpers/AssetHelper.sol";
 import { OfferHelper } from "./helpers/OfferHelper.sol";
@@ -10,6 +10,22 @@ import { DotcEscrowV2 } from "./DotcEscrowV2.sol";
 import { DotcManagerV2 } from "./DotcManagerV2.sol";
 
 import { Asset, AssetType, OfferFillType, OfferStruct, DotcOffer, OnlyManager, OfferPricingType, TakingOfferType } from "./structures/DotcStructuresV2.sol";
+
+
+
+interface IERC165 {
+    /**
+     * @dev Returns true if this contract implements the interface defined by
+     * `interfaceId`. See the corresponding
+     * https://eips.ethereum.org/EIPS/eip-165#how-interfaces-are-identified[EIP section]
+     * to learn more about how these ids are created.
+     *
+     * This function call must use less than 30 000 gas.
+     */
+    function supportsInterface(bytes4 interfaceId) external view returns (bool);
+}
+
+
 
 /// @title Errors related to the Dotc contract
 /// @notice Provides error messages for various failure conditions related to Offers and Assets handling
@@ -50,6 +66,10 @@ error IncorrectOfferPricingType(OfferPricingType incorrectOfferPricingType);
  * ////////////////DISCLAIMER////////////////DISCLAIMER////////////////DISCLAIMER////////////////
  * @author Swarm
  */
+
+
+
+
 contract DotcV2 is Initializable, Receiver {
     /// @dev Used for Safe transfer tokens.
     using SafeTransferLib for address;
@@ -289,7 +309,7 @@ contract DotcV2 is Initializable, Receiver {
         offer.checkDotcOfferParams();
         offer.offer.checkOfferParams();
 
-        if (offer.offer.offerPrice.offerPricingType != OfferPricingType.DynamicPricing) {
+        if (offer.offer.offerPricingType != OfferPricingType.DynamicPricing) {
             revert IncorrectOfferPricingType(offer.offer.offerPrice.offerPricingType);
         }
 

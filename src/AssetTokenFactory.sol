@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import "./AssetToken.sol";
-import "../interfaces/IAssetTokenData.sol";
-import "../interfaces/IAssetTokenFactory.sol";
+import "./interfaces/IAssetTokenData.sol";
+import "./interfaces/IAssetTokenFactory.sol";
 
 /// @author Swarm Markets
 /// @title Asset Token Factory for Asset Token Contract

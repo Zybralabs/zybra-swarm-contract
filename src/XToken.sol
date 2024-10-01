@@ -1,9 +1,9 @@
 //SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.16;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20Pausable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Pausable.sol";
+import "lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
+import "lib/openzeppelin-contracts/contracts/utils/Address.sol";
 
 import "./authorization/Authorizable.sol";
 import "./interfaces/IAuthorization.sol";
@@ -53,10 +53,10 @@ contract XToken is ERC20Pausable, AccessControl, Authorizable {
         require(authorization_ != address(0), "authorization is the zero address");
         require(operationsRegistry_ != address(0), "operationsRegistry is the zero address");
 
-        _setupDecimals(decimals_);
+        // _setupDecimals(decimals_);
 
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setKya(kya_);
+        // _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        // _setKya(kya_);
         _setAuthorization(authorization_);
         operationsRegistry = IOperationsRegistry(operationsRegistry_);
     }

@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.16;
 
-import "@openzeppelin/contracts/GSN/Context.sol";
+import "lib/openzeppelin-contracts/contracts/utils/Context.sol";
 import "../interfaces/IAuthorization.sol";
 
 /**

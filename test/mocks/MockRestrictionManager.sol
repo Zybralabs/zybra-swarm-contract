@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 
 import "test/mocks/Mock.sol";
-import "../../contracts/Zybra/token/RestrictionManager.sol";
+import "../../src/token/RestrictionManager.sol";
 
 contract MockRestrictionManager is RestrictionManager, Mock {
     constructor(address root_, address deployer) RestrictionManager(root_, deployer) {}

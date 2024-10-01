@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.25;
+pragma solidity 0.8.19;
 
-import { OwnableUpgradeable } from "./exports/ExternalExports.sol";
 import { AssetHelper } from "./helpers/AssetHelper.sol";
 import { DotcV2 } from "./DotcV2.sol";
 import { DotcEscrowV2 } from "./DotcEscrowV2.sol";
 import { OnlyDotc, ZeroAddressPassed, IncorrectPercentage } from "./structures/DotcStructuresV2.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 
 /// @title Errors related to management in the Dotc contract.
 /// @notice Provides error messages for various failure conditions related to dotc management handling.

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 
 import "test/mocks/Mock.sol";
-import {BytesLib} from "../../contracts/Zybra/libraries/BytesLib.sol";
-import {MessagesLib} from "../../contracts/Zybra/libraries/MessagesLib.sol";
+import {BytesLib} from "../../src/libraries/BytesLib.sol";
+import {MessagesLib} from "../../src/libraries/MessagesLib.sol";
 
 contract MockGasService is Mock {
     using BytesLib for bytes;

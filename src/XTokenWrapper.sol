@@ -1,10 +1,10 @@
 //SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.16;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC1155/ERC1155Holder.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 import "./interfaces/IXToken.sol";
 
@@ -42,7 +42,7 @@ contract XTokenWrapper is AccessControl, ERC1155Holder {
      *
      */
     constructor() {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        // _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     /**

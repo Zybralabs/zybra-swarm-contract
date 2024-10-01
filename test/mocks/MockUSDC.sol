@@ -1,21 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 
-import {Auth} from "../../contracts/Zybra/Auth.sol";
-import {EIP712Lib} from "../../contracts/Zybra/libraries/EIP712Lib.sol";
-import {SignatureLib} from "../../contracts/Zybra/libraries/SignatureLib.sol";
-import {IERC20, IERC20Metadata} from "../../contracts/Zybra/interfaces/IERC20.sol";
+import {Auth} from "../../src/Auth.sol";
+import {EIP712Lib} from "../../src/libraries/EIP712Lib.sol";
+import {SignatureLib} from "../../src/libraries/SignatureLib.sol";
+import {IERC20} from "../../src/interfaces/IERC20.sol";
 
 /// @title  ERC20
 /// @notice Standard ERC-20 implementation, with mint/burn functionality.
 /// @dev    Requires allowance even when from == msg.sender, to mimic
 ///         USDC and the OpenZeppelin ERC20 implementation.
-contract MockUSDC is Auth, IERC20Metadata {
-    /// @inheritdoc IERC20Metadata
+contract MockUSDC is Auth, IERC20 {
     string public name;
-    /// @inheritdoc IERC20Metadata
     string public symbol;
-    /// @inheritdoc IERC20Metadata
     uint8 public immutable decimals;
     /// @inheritdoc IERC20
     uint256 public totalSupply;

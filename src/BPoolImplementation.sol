@@ -466,7 +466,7 @@ library Address {
 
 
 // solhint-disable-next-line compiler-version
-pragma solidity >=0.4.24 <0.8.0;
+pragma solidity >=0.4.24 <0.8.20;
 
 
 /**

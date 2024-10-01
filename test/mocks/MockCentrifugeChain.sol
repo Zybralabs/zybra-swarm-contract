@@ -1,11 +1,11 @@
 // SPDw-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 
-import {MessagesLib} from "../../contracts/Zybra/libraries/MessagesLib.sol";
-import {CastLib} from "../../contracts/Zybra/libraries/CastLib.sol";
-import {BytesLib} from "../../contracts/Zybra/libraries/BytesLib.sol";
-import {Domain} from "../../contracts/Zybra/interfaces/IPoolManager.sol";
-import {RestrictionUpdate} from "../../contracts/Zybra/interfaces/token/IRestrictionManager.sol";
+import {MessagesLib} from "../../src/libraries/MessagesLib.sol";
+import {CastLib} from "../../src/libraries/CastLib.sol";
+import {BytesLib} from "../../src/libraries/BytesLib.sol";
+import {Domain} from "../../src/interfaces/IPoolManager.sol";
+import {RestrictionUpdate} from "../../src/interfaces/token/IRestrictionManager.sol";
 import "forge-std/Test.sol";
 
 interface AdapterLike {

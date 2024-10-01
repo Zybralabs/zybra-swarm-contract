@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.25;
+pragma solidity 0.8.19;
 
-import { IERC20, IERC721, IERC1155 } from "../exports/ExternalExports.sol";
 import { Asset, DotcOffer, OfferStruct } from "../structures/DotcStructuresV2.sol";
+import { DotcEscrowV2 } from "../DotcEscrowV2.sol";
 
 interface IDotcV2 {
     

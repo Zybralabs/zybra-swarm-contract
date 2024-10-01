@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.7.0;
+pragma solidity >=0.7.0 <0.8.20;
 
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 
 /**
  * @dev External interface of AccessControl declared to support ERC165 detection.

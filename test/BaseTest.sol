@@ -1,21 +1,21 @@
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma abicoder v2;
 
-// core contracts/Zybra
-import {Root} from "../src/Root.sol";
-import {Escrow} from "../src/Escrow.sol";
+// core src
 import {ERC20} from "../src/token/ERC20.sol";
 import {Deployer} from "../../script/Deployer.s.sol";
 import {MockSafe} from "test/mocks/MockSafe.sol";
 import "../src/interfaces/IERC20.sol";
 import {LzybraVault} from "../src/LZybraSwarmVaultV1.sol";
 import {Lzybra} from "../src/token/LZYBRA.sol";
-import "../src/AssetToken.sol";
-import "../src/AssetTokenFactory.sol";
 import "../src/AssetTokenData.sol";
+import {AssetToken} from "../src/AssetToken.sol";
+import {AssetTokenFactory} from "../src/AssetTokenFactory.sol";
+
 import "../src/DotcManagerV2.sol";
 import "../src/DotcV2.sol";
+import "test/mocks/MockAdapter.sol";
 
 import {MessagesLib} from "../../../src/libraries/MessagesLib.sol";
 // mocks
@@ -33,11 +33,10 @@ contract BaseTest is Deployer, Test {
     mockChainlink public ChainLinkMockUSDC;
     mockChainlink public ChainLinkMockNVIDIA;
     mockChainlink public ChainLinkMockMSCRF;
-    MockAdapter adapter2;
     AssetTokenData assetTokenData;
-    AssetToken asset1;
-    AssetToken asset2;
-    AssetToken asset3;
+    AssetToken public asset1;
+    AssetToken public asset2;
+    AssetToken public asset3;
     AssetTokenFactory assetTokenFactory;
     MockAdapter adapter3;
     address[] testAdapters;
@@ -58,7 +57,7 @@ contract BaseTest is Deployer, Test {
 
     // default values
     uint128 public defaultAssetId = 1;
-    uint128 public defaultPrice = 1 * 10**18;
+    uint128 public defaultPrice = 5 * 10**18;
     uint8 public defaultDecimals = 8;
 
     function setUp() public virtual {
@@ -69,7 +68,7 @@ contract BaseTest is Deployer, Test {
         pausers[0] = self;
         adminSafe = address(new MockSafe(pausers, 1));
 
-        // deploy core contracts/Zybra
+        // deploy core src
         deploy(address(this));
 
         // deploy mock adapters
@@ -86,12 +85,11 @@ contract BaseTest is Deployer, Test {
         testAdapters.push(address(adapter2));
         testAdapters.push(address(adapter3));
 
-        // wire contracts/Zybra
+        // wire src
         wire(address(adapter1));
         // remove deployer access
         // removeDeployerAccess(address(adapter)); // need auth permissions in tests
 
-        mockedGasService = new MockGasService();
         USDC = _newErc20("X's Dollar", "USDX", 6);
         assetTokenData = new AssetTokenData("0000000000000000000000000000000000000000000000000000000000000063");
         assetTokenFactory = new AssetTokenFactory(address(assetTokenData));
@@ -119,21 +117,18 @@ contract BaseTest is Deployer, Test {
         lzybravault = new LzybraVault(address(lzybra),address(dotcV2),address(USDC));
         lzybra.grantMintRole(address(lzybravault));
         gateway.file("adapters", testAdapters);
-        gateway.file("gasService", address(mockedGasService));
         vm.deal(address(gateway), GATEWAY_INITIAL_BALACE);
 
-        mockedGasService.setReturn("estimate", uint256(0.5 gwei));
-        mockedGasService.setReturn("shouldRefuel", true);
        
-        // Label contracts/Zybra
+        // Label src
 
         vm.label(address(USDC), "ERC20");
         vm.label(address(lzybravault), "Lzybravault");
         
 
-        // Exclude predeployed contracts/Zybra from invariant tests by default
-        excludeContract(address(dotcManagerV2));
-        excludeContract(address(dotcV2));
+        // Exclude predeployed src from invariant tests by default
+        
+       
   
     }
    
@@ -143,81 +138,37 @@ contract BaseTest is Deployer, Test {
     }
    
     // helpers
-    function deployVault(
-        uint64 poolId,
-        uint8 trancheDecimals,
-        address hook,
-        string memory tokenName,
-        string memory tokenSymbol,
-        bytes16 trancheId,
-        uint128 assetId,
-        address asset
-    ) public returns (address) {
-        if (poolManager.idToAsset(assetId) == address(0)) {
-            centrifugeChain.addAsset(assetId, asset);
-        }
 
-        if (poolManager.getTranche(poolId, trancheId) == address(0)) {
-            centrifugeChain.batchAddPoolAllowAsset(poolId, assetId);
-            centrifugeChain.addTranche(poolId, trancheId, tokenName, tokenSymbol, trancheDecimals, hook);
 
-            poolManager.deployTranche(poolId, trancheId);
-        }
 
-        if (!poolManager.isAllowedAsset(poolId, asset)) {
-            centrifugeChain.allowAsset(poolId, assetId);
-        }
 
-        address vaultAddress = poolManager.deployVault(poolId, trancheId, asset);
+ 
 
-        return vaultAddress;
-    }
+    // function deposit(address _vault, address _investor, uint256 amount,uint256 lzybra_amount) public {
+    //     deposit(_vault, _investor, amount, true,lzybra_amount);
+    // }
 
-    function deployVault(
-        uint64 poolId,
-        uint8 decimals,
-        string memory tokenName,
-        string memory tokenSymbol,
-        bytes16 trancheId,
-        uint128 asset
-    ) public returns (address) {
-        return deployVault(poolId, decimals, restrictionManager, tokenName, tokenSymbol, trancheId, asset, address(USDC));
-    }
+    // function deposit(address _vault, address _investor, uint256 amount, bool claimDeposit, uint256 lzybra_amount) public {
+    //     erc20.mint(_investor, amount);
+    //         // member
+    //     vm.startPrank(_investor);
+    //     Lzybravault.setEndorsedOperator(address(this), true, address(vault));
+    //     erc20.approve(address(Lzybravault), amount); // add allowance
+    //     console.log("withdraw====>");
+    //     Lzybravault.requestDeposit(amount, _vault);
+    //     // trigger executed collectInvest
+    //     uint128 assetId = poolManager.assetToId(USDC); // retrieve assetId
+    
+    //      uint256 shares = vault.maxMint(_investor);
+    //     if (claimDeposit) {
+    //         uint256 numerator = 75;
+    //     uint256 denominator = 100;
+    //     uint256 multiplier = numerator * 1e18 / denominator; // Using a large number to avoid fractional division
 
-    function deploySimpleVault() public returns (address) {
-        return deployVault(5, 6, restrictionManager, "name", "symbol", bytes16(bytes("1")), defaultAssetId, address(USDC));
-    }
-
-    function deposit(address _vault, address _investor, uint256 amount,uint256 lzybra_amount) public {
-        deposit(_vault, _investor, amount, true,lzybra_amount);
-    }
-
-    function deposit(address _vault, address _investor, uint256 amount, bool claimDeposit, uint256 lzybra_amount) public {
-        ERC7540Vault vault = ERC7540Vault(_vault);
-        erc20.mint(_investor, amount);
-        centrifugeChain.updateMember(vault.poolId(), vault.trancheId(), _investor, type(uint64).max); // add user as
-            // member
-        vm.startPrank(_investor);
-        root.endorse(address(Lzybravault));
-        Lzybravault.setEndorsedOperator(address(this), true, address(vault));
-        erc20.approve(address(Lzybravault), amount); // add allowance
-        console.log("withdraw====>");
-        Lzybravault.requestDeposit(amount, _vault);
-        // trigger executed collectInvest
-        uint128 assetId = poolManager.assetToId(USDC); // retrieve assetId
-        centrifugeChain.isFulfilledDepositRequest(
-            vault.poolId(), vault.trancheId(), bytes32(bytes20(_investor)), assetId, uint128(amount), uint128(amount)
-        );
-         uint256 shares = vault.maxMint(_investor);
-        if (claimDeposit) {
-            uint256 numerator = 75;
-        uint256 denominator = 100;
-        uint256 multiplier = numerator * 1e18 / denominator; // Using a large number to avoid fractional division
-
-            Lzybravault.deposit(amount, address(vault), lzybra_amount); // claim the tranches
-        }
-        vm.stopPrank();
-    }
+    //         Lzybravault.deposit(amount, address(vault), lzybra_amount); // claim the tranches
+    //     }
+    //     vm.stopPrank();
+    // }
 
     // Helpers
     function _addressToBytes32(address x) internal pure returns (bytes32) {

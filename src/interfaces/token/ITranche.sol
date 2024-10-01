@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.5.0;
 
-import {IERC20Metadata} from "../../interfaces/IERC20.sol";
+import {IERC20} from "../../interfaces/IERC20.sol";
 import {IERC7575Share} from "../../interfaces/IERC7575.sol";
 
 interface IERC1404 {
@@ -20,7 +20,7 @@ interface IERC1404 {
     function messageForTransferRestriction(uint8 restrictionCode) external view returns (string memory);
 }
 
-interface ITranche is IERC20Metadata, IERC7575Share, IERC1404 {
+interface ITranche is IERC20, IERC7575Share, IERC1404 {
     // --- Events ---
     event File(bytes32 indexed what, address data);
     event SetHookData(address indexed user, bytes16 data);

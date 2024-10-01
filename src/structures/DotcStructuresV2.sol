@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.25;
+pragma solidity 0.8.19;
 
 /// @title Errors related to offer management in the Dotc Structures.
 /// @notice Provides error messages for various failure conditions related to dotc structures handling.

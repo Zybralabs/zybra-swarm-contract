@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 
 import {Auth} from "../Auth.sol";
 import {IRoot} from "../interfaces/IRoot.sol";

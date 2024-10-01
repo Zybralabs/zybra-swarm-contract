@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 /**
  * @title Interest-bearing ERC20-like token for Zybra protocol.
  *
@@ -36,7 +36,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * emitting an event for each token holder and thus running an unbounded loop.
  */
 contract stETHMock is IERC20 {
-    using SafeMath for uint256;
+    using Math for uint256;
     uint256 private totalShares;
 
     uint256 totalEther;

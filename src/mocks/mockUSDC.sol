@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 /**
  * @title esLBR is an ERC20-compliant token, but cannot be transferred and can only be minted through the esLBRMinter contract or redeemed for LBR by destruction.
  * - The maximum amount that can be minted through the esLBRMinter contract is 55 million.
  * - esLBR can be used for community governance voting.
  */
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
 
 /**

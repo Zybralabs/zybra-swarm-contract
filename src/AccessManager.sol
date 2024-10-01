@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "./interfaces/IAuthorizationContract.sol";
 
 /// @author Swarm Markets

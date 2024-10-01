@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.25;
+pragma solidity 0.8.19;
 
 /**
  * @title Interface for DOTC Authorizations Contracts (as part of the "SwarmX.eth Protocol")

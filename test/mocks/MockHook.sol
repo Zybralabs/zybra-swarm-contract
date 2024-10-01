@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.26;
+pragma solidity 0.8.19;
 
-import {IERC165} from "../../contracts/Zybra/interfaces/IERC7575.sol";
-import {IHook} from "../../contracts/Zybra/interfaces/token/IHook.sol";
+import {IERC165} from "../../src/interfaces/IERC7575.sol";
+import {IHook} from "../../src/interfaces/token/IHook.sol";
 import "test/mocks/Mock.sol";
 
 contract MockHook is Mock {

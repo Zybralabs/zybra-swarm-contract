@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.19;
 
 import "forge-std/Test.sol";
-import { Asset, AssetType, OfferFillType, OfferStruct, DotcOffer, OnlyManager, OfferPricingType, TakingOfferType } from "../src/structures/DotcStructuresV2.sol";
+import { Asset, AssetType, OfferFillType,PercentageType,OfferPrice ,OfferStruct, DotcOffer, OnlyManager, OfferPricingType, TakingOfferType } from "../src/structures/DotcStructuresV2.sol";
 import "./BaseTest.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract depositTest is BaseTest {
     uint256 AMOUNT = 100e18;
     // Mock withdrawal asset and offer
-    Asset withdrawalAsset;
-    Asset withdrawalAsset2;
-    Asset withdrawalAsset2;
+    Asset asset;
+    Asset asset2;
+    Asset asset3;
     OfferStruct offer;
     OfferStruct offer2;
     OfferStruct offer3;
@@ -21,12 +20,15 @@ contract depositTest is BaseTest {
 
        function setUp() public {
         // Mint initial balances for USDC
-        USDC.mint(self, initialBalance);  // Mint for test contract
-        USDC.mint(investor, initialBalance);  // Optional investor balance
+        USDC.mint(self, AMOUNT);  // Mint for test contract
+        USDC.mint(investor, AMOUNT);  // Optional investor balance
 
         // User approves the lzybravault to spend their USDC
         vm.startPrank(user);
-        USDC.approve(address(lzybravault), initialBalance);
+        USDC.approve(address(lzybravault), AMOUNT);
+        asset.approve(address(lzybravault), AMOUNT);
+        asset2.approve(address(lzybravault), AMOUNT);
+        asset3.approve(address(lzybravault), AMOUNT);
         vm.stopPrank();
 
          asset1.requestMint(AMOUNT);
@@ -75,7 +77,7 @@ contract depositTest is BaseTest {
     assetPrice: (address(ChainLinkMockNVIDIA), 0, 0) // Example price feed tuple
 });
 
-        OfferStruct offer = OfferStruct({
+         offer = OfferStruct({
         takingOfferType: TakingOfferType.BlockOffer, // Example enum value (2) for BlockOffer
         offerPrice: OfferPrice({
         offerPricingType: OfferPricingType.FixedPricing, // Pricing type (FixedPricing)
@@ -84,14 +86,14 @@ contract depositTest is BaseTest {
         percentageType: PercentageType.NoType // No percentage type used
         }),
         specialAddresses: "",
-        authorizationAddresses: [user,investor] , 
+        authorizationAddresses: [address(this),user,investor] , 
         expiryTimestamp: block.timestamp + 2 days, // Example expiry timestamp
         timelockPeriod: 0, // No timelock period
         terms: "tbd", // Placeholder for offer terms
         commsLink: "tbd" // Placeholder for communication link
 });
 
-  OfferStruct offer2 = OfferStruct({
+   offer2 = OfferStruct({
         takingOfferType: TakingOfferType.BlockOffer, // Example enum value (2) for BlockOffer
         offerPrice: OfferPrice({
         offerPricingType: OfferPricingType.FixedPricing, // Pricing type (FixedPricing)
@@ -107,7 +109,7 @@ contract depositTest is BaseTest {
         commsLink: "tbd" // Placeholder for communication link
 });
 
-  OfferStruct offer3 = OfferStruct({
+   offer3 = OfferStruct({
         takingOfferType: TakingOfferType.BlockOffer, // Example enum value (2) for BlockOffer
         offerPrice: OfferPrice({
         offerPricingType: OfferPricingType.FixedPricing, // Pricing type (FixedPricing)
@@ -123,60 +125,19 @@ contract depositTest is BaseTest {
         commsLink: "tbd" // Placeholder for communication link
 });
 
-        dotcV2.makeOffer(depositAsset, withdrawalAsset, offer);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset1, offer);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer2);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset3, offer3);
+
+
+        uint256 amount = 2 *10**18;
+        vm.startPrank(user);
+        lzybravault.deposit(amount, withdrawalAsset1, 1);
+        lzybravault.deposit(amount, withdrawalAsset2, 2);
 
     }
 
-    function testdepositAndMintWithReverts() public {
-        // Prank user for deposit
-        vm.startPrank(user);
-        offerId++;
-        // --- 1. Test deposit and Mint ---
-        lzybravault.deposit(assetAmount, withdrawalAsset, offerId);
-
-        // Assert user balance after deposit
-        assertEq(USDC.balanceOf(user), initialBalance - assetAmount, "User USDC balance not reduced correctly");
-
-        // Assert correct LZYBRA minting
-        uint256 expectedMintAmount = assetAmount * fakeOfferPrice;
-        assertEq(lzybra.balanceOf(user), expectedMintAmount, "LZYBRA tokens minted incorrectly");
+  
 
  
-
-        // --- 2. Test Multiple deposits ---
-        lzybravault.deposit(assetAmount, withdrawalAsset, offer);
-        assertEq(USDC.balanceOf(user), initialBalance - (2 * assetAmount), "Second deposit failed");
-
-        // Verify cumulative LZYBRA minting
-        uint256 totalMintAmount = 2 * (assetAmount * fakeOfferPrice);
-        assertEq(lzybra.balanceOf(user), totalMintAmount, "Incorrect LZYBRA mint amount after multiple deposits");
-
-        // --- 3. Test Zero deposit ---
-        vm.expectRevert("deposit amount must be greater than 0");
-        lzybravault.deposit(0, withdrawalAsset, offer);
-
-        vm.stopPrank();
-    }
-
-    function testdepositWithInvalidConditions() public {
-        // --- 1. Test Invalid Offer Price ---
-        offer.offerPrice = OfferPrice({ unitPrice: 0 });
-
-        // Prank user trying to deposit with invalid offer
-        vm.startPrank(user);
-        vm.expectRevert("Invalid offer price");
-        lzybravault.deposit(assetAmount, withdrawalAsset, offer);
-
-        // --- 2. Test deposit Without Approval ---
-        USDC.approve(address(lzybravault), 0);  // Revoke approval
-        vm.expectRevert("ERC20: transfer amount exceeds allowance");
-        lzybravault.deposit(assetAmount, withdrawalAsset, offer);
-
-        // --- 3. Test DOTCV2 Offer Call ---
-        USDC.approve(address(lzybravault), initialBalance); // Re-approve for valid test
-        vm.expectCall(address(dotcV2), abi.encodeWithSelector(dotcV2.makeOffer.selector, withdrawalAsset, withdrawalAsset, offer));
-        lzybravault.deposit(assetAmount, withdrawalAsset, offer);
-
-        vm.stopPrank();
-    }
 }

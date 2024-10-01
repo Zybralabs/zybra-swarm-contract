@@ -1,19 +1,19 @@
 //SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.16;
 
-import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/utils/math/SafeMathUpgradeable.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/utils/AddressUpgradeable.sol";
 
 import "./AuthorizationStorage.sol";
 
-import "../interfaces/IAuthorization.sol";
-import "../interfaces/IEurPriceFeed.sol";
-import "../interfaces/IOperationsRegistry.sol";
-import "../interfaces/IBFactory.sol";
-import "../interfaces/IXTokenWrapper.sol";
+import "./interfaces/IAuthorization.sol";
+import "./interfaces/IEurPriceFeed.sol";
+import "./interfaces/IOperationsRegistry.sol";
+import "./interfaces/IBFactory.sol";
+import "./interfaces/IXTokenWrapper.sol";
 
 /**
  * @title Authorization

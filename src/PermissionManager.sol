@@ -1,9 +1,9 @@
 //SPDX-License-Identifier: GPL-3.0-only
-pragma solidity ^0.7.0;
+pragma solidity >=0.7.0 <0.8.20;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 
 import "./PermissionManagerStorage.sol";
 
