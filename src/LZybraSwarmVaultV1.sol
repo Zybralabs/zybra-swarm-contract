@@ -289,31 +289,31 @@ uint256 depositToWithdrawalRate=0;
     /**
      * @dev Refresh LBR reward before adding providers debt. Refresh Zybra generated service fee before adding totalSupply. Check providers collateralRatio cannot below `safeCollateralRatio`after minting.
      */
-    function _mintLZYBRA(
-        address _provider,
-        uint256 _mintAmount,
-        uint256 _assetPrice
-    ) internal virtual {
-        // require(
-        //     poolTotalCirculation + _mintAmount <=
-        //         configurator.mintVaultMaxSupply(address(this)),
-        //     "ESL"
-        // );
-        //configuration check
-         require(
-            poolTotalCirculation + _mintAmount <=
-                12455,
-            "ESL"
-        );
-        _updateFee(_provider);
+    // function _mintLZYBRA(
+    //     address _provider,
+    //     uint256 _mintAmount,
+    //     uint256 _assetPrice
+    // ) internal virtual {
+    //     // require(
+    //     //     poolTotalCirculation + _mintAmount <=
+    //     //         configurator.mintVaultMaxSupply(address(this)),
+    //     //     "ESL"
+    //     // );
+    //     //configuration check
+    //      require(
+    //         poolTotalCirculation + _mintAmount <=
+    //             12455,
+    //         "ESL"
+    //     );
+    //     _updateFee(_provider);
 
-        borrowed[_provider] += _mintAmount;
-        _checkHealth(_provider, _assetPrice);
+    //     borrowed[_provider] += _mintAmount;
+    //     _checkHealth(_provider, _assetPrice);
 
-        LZYBRA.mint(_provider, _mintAmount);
-        poolTotalCirculation += _mintAmount;
-        emit Mint(_provider, _mintAmount, block.timestamp);
-    }
+    //     LZYBRA.mint(_provider, _mintAmount);
+    //     poolTotalCirculation += _mintAmount;
+    //     emit Mint(_provider, _mintAmount, block.timestamp);
+    // }
 
     /**
      * @notice Burn _provideramount LZYBRA to payback minted LZYBRA for _onBehalfOf.
