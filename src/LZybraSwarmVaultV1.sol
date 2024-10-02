@@ -213,77 +213,77 @@ uint256 depositToWithdrawalRate=0;
      */
 // remaining: fix the liquidation function..
 
-//     function liquidation(
-//     address provider,
-//     address onBehalfOf,
-//     uint256 assetAmount,
-//     Asset depositAsset
-// ) external virtual {
-//     // Fetch asset price and collateral ratio
-//     uint256 assetPrice = getAssetPrice(withdrawalAsset.assetAddress);
-//     uint256 depositAddress = depositAsset.assetAddress;
+    function liquidation(
+    address provider,
+    address onBehalfOf,
+    uint256 assetAmount,
+    Asset depositAsset
+) external virtual {
+    // Fetch asset price and collateral ratio
+    uint256 assetPrice = getAssetPrice(withdrawalAsset.assetAddress);
+    uint256 depositAddress = depositAsset.assetAddress;
 
-//     // Calculate collateral ratio
-//     uint256 collateralValue = UserAsset[onBehalfOf][depositAddress] * assetPrice;
-//     uint256 borrowedValue = getBorrowed(onBehalfOf);
-//     uint256 onBehalfOfCollateralRatio = (collateralValue * 100) / borrowedValue;
+    // Calculate collateral ratio
+    uint256 collateralValue = UserAsset[onBehalfOf][depositAddress] * assetPrice;
+    uint256 borrowedValue = getBorrowed(onBehalfOf);
+    uint256 onBehalfOfCollateralRatio = (collateralValue * 100) / borrowedValue;
 
-//     // Check if collateral ratio falls below the badCollateralRatio threshold
-//     // require(
-//     //     onBehalfOfCollateralRatio < configurator.getBadCollateralRatio(address(this)),
-//     //     "Borrower's collateral ratio should be below badCollateralRatio"
-//     // );
-//      require(
-//         onBehalfOfCollateralRatio < 130e18,
-//         "Borrower's collateral ratio should be below badCollateralRatio"
-//     );
+    // Check if collateral ratio falls below the badCollateralRatio threshold
+    // require(
+    //     onBehalfOfCollateralRatio < configurator.getBadCollateralRatio(address(this)),
+    //     "Borrower's collateral ratio should be below badCollateralRatio"
+    // );
+     require(
+        onBehalfOfCollateralRatio < 130e18,
+        "Borrower's collateral ratio should be below badCollateralRatio"
+    );
 
-//     // Check if the provider is authorized to perform liquidation
-//     require(
-//         LZYBRA.allowance(provider, address(this)) != 0 || msg.sender == provider,
-//         "Provider should authorize liquidation LZYBRA"
-//     );
+    // Check if the provider is authorized to perform liquidation
+    require(
+        LZYBRA.allowance(provider, address(this)) != 0 || msg.sender == provider,
+        "Provider should authorize liquidation LZYBRA"
+    );
 
-//     // Calculate LZYBRA amount to repay
-//     uint256 LZYBRAAmount = (assetAmount * assetPrice) / 1e18;
+    // Calculate LZYBRA amount to repay
+    uint256 LZYBRAAmount = (assetAmount * assetPrice) / 1e18;
 
-//     // Redeem user's collateral and repay their debt
-//     _repay(provider, onBehalfOf, calc_share(assetAmount, depositAddress, provider));
+    // Redeem user's collateral and repay their debt
+    _repay(provider, onBehalfOf, calc_share(assetAmount, depositAddress, provider));
 
-//     // Adjust the asset amount based on the collateral ratio
-//     uint256 reducedAsset = assetAmount;
-//     if (onBehalfOfCollateralRatio > 1e20 && onBehalfOfCollateralRatio < 11e19) {
-//         reducedAsset = (assetAmount * onBehalfOfCollateralRatio) / 1e20;
-//     }
-//     if (onBehalfOfCollateralRatio >= 11e19) {
-//         reducedAsset = (assetAmount * 11) / 10;
-//     }
+    // Adjust the asset amount based on the collateral ratio
+    uint256 reducedAsset = assetAmount;
+    if (onBehalfOfCollateralRatio > 1e20 && onBehalfOfCollateralRatio < 11e19) {
+        reducedAsset = (assetAmount * onBehalfOfCollateralRatio) / 1e20;
+    }
+    if (onBehalfOfCollateralRatio >= 11e19) {
+        reducedAsset = (assetAmount * 11) / 10;
+    }
 
-//     // Calculate rewards for the keeper (provider)
-//     //config solve
-//     // uint256 keeperRatio = configurator.vaultKeeperRatio(address(this));
-//     uint256 keeperRatio = 110;
-//     uint256 reward2keeper;
-//     if (
-//         msg.sender != provider && 
-//         onBehalfOfCollateralRatio >= (1e20 + keeperRatio * 1e18)
-//     ) {
-//         reward2keeper = (assetAmount * keeperRatio) / 100;
-//         collateralAsset.safeTransfer(msg.sender, reward2keeper); // Reward keeper
-//     }
+    // Calculate rewards for the keeper (provider)
+    //config solve
+    // uint256 keeperRatio = configurator.vaultKeeperRatio(address(this));
+    uint256 keeperRatio = 110;
+    uint256 reward2keeper;
+    if (
+        msg.sender != provider && 
+        onBehalfOfCollateralRatio >= (1e20 + keeperRatio * 1e18)
+    ) {
+        reward2keeper = (assetAmount * keeperRatio) / 100;
+        collateralAsset.safeTransfer(msg.sender, reward2keeper); // Reward keeper
+    }
 
-//     // Transfer the remaining reduced asset to the provider
-//     collateralAsset.safeTransfer(provider, reducedAsset - reward2keeper);
+    // Transfer the remaining reduced asset to the provider
+    collateralAsset.safeTransfer(provider, reducedAsset - reward2keeper);
 
-//     // Emit liquidation event
-//     emit LiquidationRecord(
-//         provider,
-//         msg.sender,
-//         onBehalfOf,
-//         LZYBRAAmount,
-//         reducedAsset
-//     );
-// }
+    // Emit liquidation event
+    emit LiquidationRecord(
+        provider,
+        msg.sender,
+        onBehalfOf,
+        LZYBRAAmount,
+        reducedAsset
+    );
+}
 
 
     /**
