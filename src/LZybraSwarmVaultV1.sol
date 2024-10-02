@@ -40,6 +40,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     using DotcOfferHelper for DotcOffer;
 
     ILZYBRA public immutable LZYBRA;
+    Iconfigurator public configurator;
     IDotcV2 public DOTCV2;
     IERC20 public immutable collateralAsset;
     uint256 poolTotalCirculation;
@@ -83,11 +84,13 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         address _collateralAsset,
         address _lzybra,
         address _dotcv2,
-        address _initialOwner
+        address _initialOwner,
+        address _coonfigurator
     ) Ownable(_initialOwner){
         LZYBRA = ILZYBRA(_lzybra);
         DOTCV2 = IDotcV2(_dotcv2);
         collateralAsset = IERC20(_collateralAsset);
+        configurator =  Iconfigurator(_coonfigurator);
     }
 
     /**
@@ -129,7 +132,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         (uint256 depositToWithdrawalRate, ) = getAssetPrice(asset, withdrawalAsset, offer.offerPrice);
 
         // Mint LZYBRA tokens based on the asset price and deposit amount
-        _mintLZYBRA(msg.sender, assetAmount, depositToWithdrawalRate);
+        _mintLZYBRA(msg.sender, assetAmount ,depositToWithdrawalRate,withdrawalAsset.assetAddress);
 
         emit DepositAsset(msg.sender, address(collateralAsset), assetAmount, block.timestamp);
     }
@@ -137,11 +140,10 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
     function deposit(
         uint256 assetAmount,
-        Asset calldata withdrawalAsset,
         uint256 offerId
-    ) external virtual {
+    ) external virtual { 
         require(assetAmount > 0, "Deposit amount must be greater than 0");
-
+        DotcOffer calldata offer = DOTCV2.allOffers(offerId);
         // Transfer collateral to the contract
         collateralAsset.safeTransferFrom(msg.sender, address(this), assetAmount);
 
@@ -161,20 +163,14 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         // Fetch the price of the withdrawal asset and the exchange rate
         // Fix offerId
-        // (uint256 depositToWithdrawalRate, ) = getAssetPrice(asset, withdrawalAsset, offer.offerPrice);
-uint256 depositToWithdrawalRate=0;
+        (uint256 depositToWithdrawalRate, ) = getAssetPrice(asset, offer.withdrawalAsset, offer.offer.offerPrice);
         // Mint LZYBRA tokens based on the asset price and deposit amount
-        _mintLZYBRA(msg.sender, assetAmount, depositToWithdrawalRate);
+        _mintLZYBRA(msg.sender, assetAmount, depositToWithdrawalRate,offer.withdrawalAsset.assetAddress);
 
         emit DepositAsset(msg.sender, address(collateralAsset), assetAmount, block.timestamp);
     }
 
 
-    function mintLZYBRA(Asset memory withdrawalAsset , uint256 mintAmount) internal virtual {
-        //fix 
-        uint256 assetPrice = getAssetPrice(withdrawalAsset.assetAddress);
-        _mintLZYBRA(msg.sender, msg.sender, mintAmount, assetPrice);
-    }
 
  
 
@@ -217,7 +213,8 @@ uint256 depositToWithdrawalRate=0;
     address provider,
     address onBehalfOf,
     uint256 assetAmount,
-    Asset depositAsset
+    Asset calldata depositAsset,
+    Asset calldata withdrawalAsset
 ) external virtual {
     // Fetch asset price and collateral ratio
     uint256 assetPrice = getAssetPrice(withdrawalAsset.assetAddress);
@@ -225,18 +222,15 @@ uint256 depositToWithdrawalRate=0;
 
     // Calculate collateral ratio
     uint256 collateralValue = UserAsset[onBehalfOf][depositAddress] * assetPrice;
-    uint256 borrowedValue = getBorrowed(onBehalfOf);
+    uint256 borrowedValue = getBorrowed(onBehalfOf,withdrawalAsset.assetAddress);
     uint256 onBehalfOfCollateralRatio = (collateralValue * 100) / borrowedValue;
 
     // Check if collateral ratio falls below the badCollateralRatio threshold
-    // require(
-    //     onBehalfOfCollateralRatio < configurator.getBadCollateralRatio(address(this)),
-    //     "Borrower's collateral ratio should be below badCollateralRatio"
-    // );
-     require(
-        onBehalfOfCollateralRatio < 130e18,
+    require(
+        onBehalfOfCollateralRatio < configurator.getBadCollateralRatio(address(this)),
         "Borrower's collateral ratio should be below badCollateralRatio"
     );
+
 
     // Check if the provider is authorized to perform liquidation
     require(
@@ -261,8 +255,7 @@ uint256 depositToWithdrawalRate=0;
 
     // Calculate rewards for the keeper (provider)
     //config solve
-    // uint256 keeperRatio = configurator.vaultKeeperRatio(address(this));
-    uint256 keeperRatio = 110;
+    uint256 keeperRatio = configurator.vaultKeeperRatio(address(this));
     uint256 reward2keeper;
     if (
         msg.sender != provider && 
@@ -292,22 +285,17 @@ uint256 depositToWithdrawalRate=0;
     function _mintLZYBRA(
         address _provider,
         uint256 _mintAmount,
-        uint256 _assetPrice
+        uint256 _assetPrice,
+        address asset
     ) internal virtual {
-        // require(
-        //     poolTotalCirculation + _mintAmount <=
-        //         configurator.mintVaultMaxSupply(address(this)),
-        //     "ESL"
-        // );
-        //configuration check
-         require(
+        require(
             poolTotalCirculation + _mintAmount <=
-                12455,
+                configurator.mintVaultMaxSupply(address(this)),
             "ESL"
         );
-        _updateFee(_provider);
-
-        borrowed[_provider] += _mintAmount;
+  
+        _updateFee(_provider,asset);
+        borrowed[_provider][asset] += _mintAmount;
         _checkHealth(_provider, _assetPrice);
 
         LZYBRA.mint(_provider, _mintAmount);
@@ -323,12 +311,13 @@ uint256 depositToWithdrawalRate=0;
     function _repay(
         address _provider,
         address _onBehalfOf,
+        address asset,
         uint256 _amount
     ) internal virtual {
         require(_amount <= borrowed[_onBehalfOf], "Borrowed Amount is less");
         LZYBRA.transferFrom(msg.sender, address(this), _amount);
         LZYBRA.burn(_amount);
-        borrowed[_onBehalfOf] -= _amount;
+        borrowed[_onBehalfOf][asset] -= _amount;
         poolTotalCirculation -= _amount;
 
         emit Burn(_provider, _onBehalfOf, _amount, block.timestamp);
@@ -351,10 +340,10 @@ function _withdrawTakeOfferFixed(
     require(offer.depositAsset.assetAddress == address(collateralAsset), "Withdraw Asset not USDC.");
     require(userAsset >= amountToSend && userAsset > 0, "Withdraw amount exceeds User Assets.");
 
-    (uint256 assetRate, ) = getAssetPrice(offer.depositAsset, offer.withdrawalAsset, offer.offer);
+    (uint256 assetRate, ) = getAssetPrice(offer.depositAsset, offer.withdrawalAsset, offer.offer.offerPrice);
 
     // Check health only if there are borrowed assets
-    if (getBorrowed(_provider) > 0) {
+    if (getBorrowed(_provider,offer.withdrawalAsset) > 0) {
         _checkHealth(_provider, withdrawalAssetAddr, assetRate);
     }
 
@@ -374,7 +363,7 @@ function _withdrawTakeOfferFixed(
     DOTCV2.takeOfferFixed(offerId, amountToSend, _provider);
 
     // Calculate and repay LZYBRA
-    _repay(msg.sender, _provider, calc_share(amountToSend));
+    _repay(msg.sender, _provider, withdrawalAssetAddr,calc_share(amountToSend,withdrawalAssetAddr,msg.sender));
 
     // Update user balance in storage
     unchecked {
@@ -385,9 +374,8 @@ function _withdrawTakeOfferFixed(
     collateralAsset.safeTransfer(_provider, receivingAmount - fee);
 
     // Emit event, calculating received amount inline
-    emit WithdrawAsset(_provider, withdrawalAssetAddr, receivingAmount - fee, block.timestamp);
+    emit WithdrawAsset(_provider, withdrawalAssetAddr, receivingAmount - fee);
 }
-
 
 function _withdrawTakeOfferDynamic(
     address _provider,
@@ -397,7 +385,7 @@ function _withdrawTakeOfferDynamic(
     address affiliate
 ) internal virtual {
     // Cache storage reads for optimal gas consumption
-    DotcOffer memory offer = DOTCV2.allOffers(offerId);
+    DotcOffer calldata offer = DOTCV2.allOffers(offerId);
     address withdrawalAssetAddr = offer.withdrawalAsset.assetAddress;
     uint256 userAsset = UserAsset[_provider][withdrawalAssetAddr];
     uint256 fee = feeStored[_provider];
@@ -406,10 +394,10 @@ function _withdrawTakeOfferDynamic(
     require(offer.depositAsset.assetAddress == address(collateralAsset), "Withdraw Asset not USDC.");
     require(userAsset >= amountToSend && userAsset > 0, "Withdraw amount exceeds User Assets.");
 
-    (uint256 assetRate, ) = getAssetPrice(offer.depositAsset, offer.withdrawalAsset, offer.offer);
+    (uint256 assetRate, ) = getAssetPrice(offer.depositAsset, offer.withdrawalAsset, offer.offer.offerPrice);
 
     // Check health only if there are borrowed assets
-    if (getBorrowed(_provider) > 0) {
+    if (getBorrowed(_provider,withdrawalAssetAddr) > 0) {
         _checkHealth(_provider, withdrawalAssetAddr, assetRate);
     }
 
@@ -425,7 +413,7 @@ function _withdrawTakeOfferDynamic(
     require(receivingAmount > fee, "TZA");
 
     // Calculate and repay LZYBRA
-    _repay(msg.sender, _provider, calc_share(amountToSend));
+    _repay(msg.sender, _provider,withdrawalAssetAddr, calc_share(amountToSend,withdrawalAssetAddr,msg.sender));
 
     // Update user balance in storage
     unchecked {
@@ -444,24 +432,22 @@ function _withdrawTakeOfferDynamic(
      */
     function _checkHealth(address user, address asset , uint256 price) internal view {
         if (
-            // ((UserAsset[user][asset] * price * 100) / getBorrowed(user)) <
-            // configurator.getSafeCollateralRatio(address(this))
-                       ((UserAsset[user][asset] * price * 100) / getBorrowed(user)) <
-            18000)
+            ((UserAsset[user][asset] * price * 100) / getBorrowed(user, asset)) <
+            configurator.getSafeCollateralRatio(address(this)))
          
         revert("collateralRatio is Below safeCollateralRatio");
     }
 
-    function _updateFee(address user) internal {
+    function _updateFee(address user, address asset) internal {
         if (block.timestamp > feeUpdatedAt[user]) {
-            feeStored[user] += _newFee(user);
+            feeStored[user] += _newFee(user, asset);
             feeUpdatedAt[user] = block.timestamp;
         }
     }
 
-    function _newFee(address user) internal view returns (uint256) {
+    function _newFee(address user, address asset) internal view returns (uint256) {
         return
-            (borrowed[user] *
+            (borrowed[user][asset] *
                 100 *
                 (block.timestamp - feeUpdatedAt[user])) /
             (86_400 * 365) /
@@ -473,8 +459,8 @@ function _withdrawTakeOfferDynamic(
      * @param user The address of the user.
      * @return The total borrowing amount for the user.
      */
-    function getBorrowed(address user) public view returns (uint256) {
-        return borrowed[user] + feeStored[user] + _newFee(user);
+    function getBorrowed(address user, address asset) public view returns (uint256) {
+        return borrowed[user][asset] + feeStored[user] + _newFee(user,asset);
     }
 
     function getPoolTotalCirculation() external view returns (uint256) {
