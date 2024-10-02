@@ -3,7 +3,7 @@ src = "src"
 out = "out"
 solc_version = "0.8.19"  # default version
 
-[solidity]
+[profile.solidity]
 version = ["0.8.19", "0.8.19", "0.8.19"]  # add other versions as needed
 libs = ["lib"]
 remappings = [

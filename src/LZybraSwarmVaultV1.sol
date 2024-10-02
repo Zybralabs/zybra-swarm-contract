@@ -82,8 +82,9 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     constructor(
         address _collateralAsset,
         address _lzybra,
-        address _dotcv2
-    ) {
+        address _dotcv2,
+        address _initialOwner
+    ) Ownable(_initialOwner){
         LZYBRA = ILZYBRA(_lzybra);
         DOTCV2 = IDotcV2(_dotcv2);
         collateralAsset = IERC20(_collateralAsset);
@@ -104,7 +105,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
          uint256 assetAmount,
         Asset calldata withdrawalAsset,
         OfferStruct calldata offer
-    ) internal virtual {
+    ) external virtual {
         require(assetAmount > 0, "Deposit amount must be greater than 0");
 
         // Transfer collateral to the contract
@@ -138,7 +139,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         uint256 assetAmount,
         Asset calldata withdrawalAsset,
         uint256 offerId
-    ) internal virtual {
+    ) external virtual {
         require(assetAmount > 0, "Deposit amount must be greater than 0");
 
         // Transfer collateral to the contract
@@ -483,9 +484,12 @@ function _withdrawTakeOfferDynamic(
 
 
 
-    function calc_share(uint256 amount, uint256 asset,uint256 user) internal view returns (uint256) {
-        return (borrowed[user] * (amount / UserAsset[user][asset]));
-    }
+   function calc_share(uint256 amount, address asset, address user) internal view returns (uint256) {
+    uint256 borrowedAmount = borrowed[user][asset];
+    uint256 userAssetAmount = UserAsset[user][asset];
+    require(userAssetAmount > 0, "UserAsset must be greater than zero");
+    return (borrowedAmount * (amount / userAssetAmount));
+}
 
 
     function getAssetPrice(Asset calldata depositAsset,

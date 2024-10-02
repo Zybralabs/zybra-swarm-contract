@@ -104,7 +104,7 @@ contract DotcManagerV2 is OwnableUpgradeable {
      * @param _newFeeReceiver The address of the fee receiver.
      */
     function initialize(address _newFeeReceiver) public initializer {
-        __Ownable_init(msg.sender);
+        __Ownable_init();
 
         _changeFees(_newFeeReceiver, 25 * (10 ** 23), 8000);
     }

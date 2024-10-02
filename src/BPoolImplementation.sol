@@ -639,15 +639,15 @@ abstract contract BToken is Initializable, BTokenBase, IERC20 {
         return true;
     }
 
-    function transferFrom(address src, address dst, uint amt) external override returns (bool) {
-        require(msg.sender == src || amt <= _allowance[src][msg.sender], "ERR_BTOKEN_BAD_CALLER");
-        _move(src, dst, amt);
-        if (msg.sender != src && _allowance[src][msg.sender] != uint256(-1)) {
-            _allowance[src][msg.sender] = bsub(_allowance[src][msg.sender], amt);
-            emit Approval(msg.sender, dst, _allowance[src][msg.sender]);
-        }
-        return true;
+ function transferFrom(address src, address dst, uint amt) external override returns (bool) {
+    require(msg.sender == src || amt <= _allowance[src][msg.sender], "ERR_BTOKEN_BAD_CALLER");
+    _move(src, dst, amt);
+    if (msg.sender != src && _allowance[src][msg.sender] != type(uint256).max) {
+        _allowance[src][msg.sender] = bsub(_allowance[src][msg.sender], amt);
+        emit Approval(msg.sender, dst, _allowance[src][msg.sender]);
     }
+    return true;
+}
 }
 
 // File: contracts/BMath.sol

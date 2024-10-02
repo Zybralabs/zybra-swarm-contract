@@ -309,7 +309,7 @@ contract DotcV2 is Initializable, Receiver {
         offer.checkDotcOfferParams();
         offer.offer.checkOfferParams();
 
-        if (offer.offer.offerPricingType != OfferPricingType.DynamicPricing) {
+        if (offer.offer.offerPrice.offerPricingType != OfferPricingType.DynamicPricing) {
             revert IncorrectOfferPricingType(offer.offer.offerPrice.offerPricingType);
         }
 

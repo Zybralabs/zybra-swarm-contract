@@ -91,11 +91,12 @@ contract BaseTest is Deployer, Test {
         // removeDeployerAccess(address(adapter)); // need auth permissions in tests
 
         USDC = _newErc20("X's Dollar", "USDX", 6);
-        assetTokenData = new AssetTokenData("0000000000000000000000000000000000000000000000000000000000000063");
-        assetTokenFactory = new AssetTokenFactory(address(assetTokenData));
-        asset1 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"NVIDIA","NVIDIA");
-        asset2 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"MCSF","MCSF");
-        asset3 = assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"TESLA","TESLA");
+        assetTokenData = new AssetTokenData(0);
+        assetTokenFactory = new AssetTokenFactory();
+        assetTokenFactory.initialize(address(assetTokenData));
+        asset1 = AssetToken(assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"NVIDIA","NVIDIA"));
+        asset2 = AssetToken(assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"MCSF","MCSF"));
+        asset3 = AssetToken(assetTokenFactory.deployAssetToken(issuer, guardian, 500000000000000000,"ipfs://tbd",1000000000000000000,"TESLA","TESLA"));
         lzybra = new Lzybra("Lzybra", "LZYB");
 
 
@@ -110,11 +111,13 @@ contract BaseTest is Deployer, Test {
         ChainLinkMockNVIDIA.setPrice(8e18);
         ChainLinkMockMSCRF.setPrice(10e18);
 
-        dotcManagerV2 = new DotcManagerV2(fee);
-        dotcV2 = new DotcV2(address(dotcManagerV2));
+        dotcManagerV2 = new DotcManagerV2();
+        dotcManagerV2.initialize(fee);
+        dotcV2 = new DotcV2();
+        dotcV2.initialize(dotcManagerV2);
 
         // configurator.initGTialize(address(this), USDC);
-        lzybravault = new LzybraVault(address(lzybra),address(dotcV2),address(USDC));
+        lzybravault = new LzybraVault(address(lzybra),address(dotcV2),address(USDC), address(self));
         lzybra.grantMintRole(address(lzybravault));
         gateway.file("adapters", testAdapters);
         vm.deal(address(gateway), GATEWAY_INITIAL_BALACE);
@@ -230,6 +233,6 @@ contract BaseTest is Deployer, Test {
     }
 
     function addressAssumption(address user) public view returns (bool) {
-        return (user != address(0) && user != USDC && user.code.length == 0);
+        return (user != address(0) && user != address(USDC) && user.code.length == 0);
     }
 }
