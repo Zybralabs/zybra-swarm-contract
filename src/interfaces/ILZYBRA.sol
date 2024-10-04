@@ -29,6 +29,12 @@ interface ILZYBRA {
     /// @dev Returns a boolean value indicating whether the operation succeeded.
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 
+   /**
+     * @dev Returns the value of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+
     // ================================================================
     // |                      Burning & Minting                       |
     // ================================================================
