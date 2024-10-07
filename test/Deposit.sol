@@ -1,162 +1,417 @@
-// // SPDX-License-Identifier: BUSL-1.1
-// pragma solidity ^0.8.19;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity ^0.8.19;
 
-// import "forge-std/Test.sol";
-// import { Asset, AssetType,AssetPrice, OfferFillType,PercentageType,OfferPrice ,OfferStruct, DotcOffer, OnlyManager, OfferPricingType, TakingOfferType } from "../src/structures/DotcStructuresV2.sol";
-// import "./BaseTest.sol";
+import "forge-std/Test.sol";
+import {Asset, AssetType, AssetPrice, OfferFillType, PercentageType, OfferPrice, OfferStruct, DotcOffer, OnlyManager, OfferPricingType, TakingOfferType} from "../src/structures/DotcStructuresV2.sol";
+import "./BaseTest.sol";
 
-// contract depositTest is BaseTest {
-//     uint256 AMOUNT = 100e18;
-//     // Mock withdrawal asset and offer
+contract depositTest is BaseTest {
+    uint256 AMOUNT = 100e18;
+    // Mock withdrawal asset and offer
 
-//     Asset withdrawalAsset1;
-//     Asset withdrawalAsset2;
-//     Asset withdrawalAsset3;
-//     Asset depositAsset;
+    Asset withdrawalAsset1;
+    Asset withdrawalAsset2;
+    Asset withdrawalAsset3;
+    Asset depositAsset;
+
+    OfferStruct offer;
+    OfferStruct offer2;
+    OfferStruct offer3;
+    uint256 offerId;
+    // --- Events ---
+     // Initialize price feed IDs and data
+    uint256 public id1;
+    uint256 public id2;
+    uint256 public id3;
+
+    uint256 public price1 = 10e18;
+    uint256 public price2 = 15e18;
+    uint256 public price3 = 20e18;
+
+    uint256 public conf1 = 1e18;
+    uint256 public conf2 = 2e18;
+    uint256 public conf3 = 3e18;
+
+    int256 public expo1 = 0;
+    int256 public expo2 = 0;
+    int256 public expo3 = 0;
+
+    int256 public emaPrice1 = 10e18;
+    int256 public emaPrice2 = 15e18;
+    int256 public emaPrice3 = 20e18;
+
+    int256 public emaConf1 = 1e18;
+    int256 public emaConf2 = 2e18;
+    int256 public emaConf3 = 3e18;
+
+    uint256 public publishTime1 = block.timestamp;
+    uint256 public publishTime2 = block.timestamp + 1 days;
+    uint256 public publishTime3 = block.timestamp + 2 days;
+
+    uint256 public prevPublishTime1 = block.timestamp - 1 days;
+    uint256 public prevPublishTime2 = block.timestamp;
+    uint256 public prevPublishTime3 = block.timestamp + 1 days;
+
+    function deposit() public {
+        // Mint initial balances for USDC
+        USDC.mint(self, AMOUNT); // Mint for test contract
+        USDC.mint(investor, AMOUNT); // Optional investor balance
+
+        // User approves the lzybravault to spend their USDC
+        vm.startPrank(user);
+        USDC.approve(address(lzybravault), AMOUNT);
+        asset1.approve(address(lzybravault), AMOUNT);
+        asset2.approve(address(lzybravault), AMOUNT);
+        asset3.approve(address(lzybravault), AMOUNT);
+        vm.stopPrank();
+
+        asset1.requestMint(AMOUNT);
+        asset1.requestMint(AMOUNT, investor);
+        asset1.requestMint(AMOUNT, user);
+
+        asset2.requestMint(AMOUNT);
+        asset2.requestMint(AMOUNT, investor);
+        asset2.requestMint(AMOUNT, user);
+
+        asset3.requestMint(AMOUNT);
+        asset3.requestMint(AMOUNT, investor);
+        asset3.requestMint(AMOUNT, user);
+
+        // Set up withdrawal asset for the offer
+        depositAsset = Asset({
+            assetType: AssetType.ERC20, // Assuming assetType 0 represents some standard like ERC20
+            assetAddress: address(USDC), // Example deposit asset address
+            amount: defaultPrice, // Example deposit amount
+            tokenId: 0, // No specific tokenId for this asset (since it's not an NFT)
+            assetPrice: AssetPrice(address(ChainLinkMockUSDC), 0, 0) // Example price feed tuple
+        });
+
+        withdrawalAsset1 = Asset({
+            assetType: AssetType.ERC20, // Assuming assetType 1 represents ERC20 or another type
+            assetAddress: address(asset1), // Example withdrawal asset address
+            amount: defaultPrice * 3, // Example withdrawal amount
+            tokenId: 0, // No tokenId for the withdrawal asset
+            assetPrice: AssetPrice(address(ChainLinkMockNVIDIA), 0, 0) // Example price feed tuple
+        });
+
+        withdrawalAsset2 = Asset({
+            assetType: AssetType.ERC20, // Assuming assetType 1 represents ERC20 or another type
+            assetAddress: address(asset2), // Example withdrawal asset address
+            amount: defaultPrice * 1, // Example withdrawal amount
+            tokenId: 0, // No tokenId for the withdrawal asset
+            assetPrice: AssetPrice(address(ChainLinkMockNVIDIA), 0, 0) // Example price feed tuple
+        });
+
+        withdrawalAsset3 = Asset({
+            assetType: AssetType.ERC20, // Assuming assetType 1 represents ERC20 or another type
+            assetAddress: address(asset3), // Example withdrawal asset address
+            amount: defaultPrice * 3, // Example withdrawal amount
+            tokenId: 0, // No tokenId for the withdrawal asset
+            assetPrice: AssetPrice(address(ChainLinkMockMSCRF), 0, 0) // Example price feed tuple
+        });
+
+       // Fix: Dynamically initialize the array
+offer = OfferStruct({
+    takingOfferType: TakingOfferType.BlockOffer,
+    offerPrice: OfferPrice({
+        offerPricingType: OfferPricingType.FixedPricing,
+        unitPrice: 10e18,
+        percentage: 0,
+        percentageType: PercentageType.NoType
+    }),
+    specialAddresses: new address[2] , // Initialize empty array with size 2
+    authorizationAddresses: new address[2] , // Initialize empty array with size 3
+    expiryTimestamp: block.timestamp + 2 days,
+    timelockPeriod: 0,
+    terms: "tbd",
+    commsLink: "tbd"
+});
+
+
+// Set the values for the arrays manually
+offer.specialAddresses[0] = investor;
+offer.specialAddresses[1] = user;
+
+offer.authorizationAddresses[0] = address(this);
+offer.authorizationAddresses[1] = user;
+offer.authorizationAddresses[2] = investor;
+
+// Repeat the process for the second offer
+
+offer2 = OfferStruct({
+    takingOfferType: TakingOfferType.BlockOffer,
+    offerPrice: OfferPrice({
+        offerPricingType: OfferPricingType.FixedPricing,
+        unitPrice: 5e18,
+        percentage: 0,
+        percentageType: PercentageType.NoType
+    }),
+    specialAddresses: new address , // Initialize array with 2 addresses
+    authorizationAddresses: new address , // Initialize array with 2 addresses
+    expiryTimestamp: block.timestamp + 2 days,
+    timelockPeriod: 0,
+    terms: "tbd",
+    commsLink: "tbd"
+});
+
+// Set the values for the arrays manually
+offer2.specialAddresses[0] = investor;
+offer2.specialAddresses[1] = user;
+
+offer2.authorizationAddresses[0] = user;
+offer2.authorizationAddresses[1] = investor;
+
+
+        vm.startPrank(investor);
+        dotcV2.makeOffer(withdrawalAsset1, withdrawalAsset1, offer);
+        vm.startPrank(investor);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer2);
+        vm.startPrank(investor);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset3, offer3);
+    }
+
+    function createOffer(
+        TakingOfferType _takingOfferType,
+        uint256 _unitPrice
+    ) internal returns (OfferStruct memory) {
+        return
+            OfferStruct({
+                takingOfferType: _takingOfferType,
+                offerPrice: OfferPrice({
+                    offerPricingType: OfferPricingType.FixedPricing,
+                    unitPrice: _unitPrice,
+                    percentage: 0,
+                    percentageType: PercentageType.NoType
+                }),
+                specialAddresses: [investor, user],
+                authorizationAddresses: [investor, user],
+                expiryTimestamp: block.timestamp + 2 days,
+                timelockPeriod: 0,
+                terms: "tbd",
+                commsLink: "tbd"
+            });
+    }
+
+    // Comprehensive deposit test covering multiple users, amounts, and attempts to break contract
+    function testDepositFunctionalityWithMultipleAssetsAndOffers() public {
+        uint256 amount = 2 * 10 ** 18;
+        uint256 mint_amount = 10 * 10 ** 18;
+
+        // Mock different assets for multiple deposits
+        Asset memory withdrawalAsset1 = Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: address(asset1),
+            amount: amount,
+            tokenId: 0,
+            assetPrice: AssetPrice(address(ChainLinkMockNVIDIA), 0, 0)
+        });
+
+        Asset memory withdrawalAsset2 = Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: address(asset2),
+            amount: amount,
+            tokenId: 0,
+            assetPrice: AssetPrice(address(ChainLinkMockMSCRF), 0, 0)
+        });
+
+        Asset memory depositAsset = Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: address(USDC),
+            amount: amount,
+            tokenId: 0,
+            assetPrice: AssetPrice(address(ChainLinkMockUSDC), 0, 0)
+        });
+
+        // Create offers for different assets
+        OfferStruct memory offer1 = OfferStruct({
+            takingOfferType: TakingOfferType.BlockOffer,
+            offerPrice: OfferPrice({
+                offerPricingType: OfferPricingType.FixedPricing,
+                unitPrice: 10e18,
+                percentage: 0,
+                percentageType: PercentageType.NoType
+            }),
+            specialAddresses: [user, investor],
+            authorizationAddresses: [address(this), user, investor],
+            expiryTimestamp: block.timestamp + 2 days,
+            timelockPeriod: 0,
+            terms: "Offer 1 Terms",
+            commsLink: "Offer 1 Link"
+        });
+
+        OfferStruct memory offer2 = OfferStruct({
+            takingOfferType: TakingOfferType.BlockOffer,
+            offerPrice: OfferPrice({
+                offerPricingType: OfferPricingType.FixedPricing,
+                unitPrice: 5e18,
+                percentage: 0,
+                percentageType: PercentageType.NoType
+            }),
+            specialAddresses: [user, investor],
+            authorizationAddresses: [address(this), user, investor],
+            expiryTimestamp: block.timestamp + 2 days,
+            timelockPeriod: 0,
+            terms: "Offer 2 Terms",
+            commsLink: "Offer 2 Link"
+        });
+
+         // Initialize the price feeds
+        id1 = lzybravault.createPriceFeed(price1, conf1, expo1, emaPrice1, emaConf1);
+        id2 = lzybravault.createPriceFeed(price2, conf2, expo2, emaPrice2, emaConf2);
+        id3 = lzybravault.createPriceFeed(price3, conf3, expo3, emaPrice3, emaConf3);
+
+        // Make offers using the assets
+        vm.startPrank(investor);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset1, offer1);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer2);
+        vm.stopPrank();
+
     
-//     OfferStruct offer;
-//     OfferStruct offer2;
-//     OfferStruct offer3;
-//     uint256 offerId;
-//     // --- Events ---
+        // Update prices in the price feeds before deposits
+        lzybravault.updatePrice(id1, price1 + 5e18, conf1, publishTime1);
+        lzybravault.updatePrice(id2, price2 + 5e18, conf2, publishTime2);
+        lzybravault.updatePrice(id3, price3 + 5e18, conf3, publishTime3);
 
-//        function deposit() public {
-//         // Mint initial balances for USDC
-//         USDC.mint(self, AMOUNT);  // Mint for test contract
-//         USDC.mint(investor, AMOUNT);  // Optional investor balance
+        // Test successful deposit by user for offer1
+        vm.startPrank(user);
+        USDC.approve(address(lzybravault), amount);
+        lzybravault.deposit(amount, 1, mint_amount);
+        assertEq(
+            lzybra.balanceOf(user),
+            mint_amount,
+            "Deposit failed for user in offer 1"
+        );
 
-//         // User approves the lzybravault to spend their USDC
-//         vm.startPrank(user);
-//         USDC.approve(address(lzybravault), AMOUNT);
-//         asset1.approve(address(lzybravault), AMOUNT);
-//         asset2.approve(address(lzybravault), AMOUNT);
-//         asset3.approve(address(lzybravault), AMOUNT);
-//         vm.stopPrank();
+        // Update price again after deposit
+        lzybravault.updatePrice(id1, price1 + 10e18, conf1, publishTime1 + 1 hours);
 
-//          asset1.requestMint(AMOUNT);
-//          asset1.requestMint(AMOUNT,investor);
-//          asset1.requestMint(AMOUNT,user);
+        // Test partial deposit by user for offer2
+        USDC.approve(address(lzybravault), amount / 2);
+        lzybravault.deposit(amount / 2, 2, mint_amount / 2);
+        assertEq(
+            lzybra.balanceOf(user),
+            mint_amount + (mint_amount / 2),
+            "Partial deposit failed for user in offer 2"
+        );
+        vm.stopPrank();
 
-//          asset2.requestMint(AMOUNT);
-//          asset2.requestMint(AMOUNT,investor);
-//          asset2.requestMint(AMOUNT,user);
+        // Test multiple users depositing for different offers and assets
+        vm.startPrank(investor);
+        USDC.approve(address(lzybravault), amount);
+        lzybravault.deposit(amount, 1, mint_amount);
+        assertEq(
+            lzybra.balanceOf(investor),
+            mint_amount,
+            "Deposit failed for investor in offer 1"
+        );
 
-//          asset3.requestMint(AMOUNT);
-//          asset3.requestMint(AMOUNT,investor);
-//          asset3.requestMint(AMOUNT,user);
-  
+        asset2.approve(address(lzybravault), amount / 2);
+        lzybravault.deposit(amount / 2, 2, mint_amount / 2);
+        assertEq(
+            lzybra.balanceOf(investor),
+            mint_amount + (mint_amount / 2),
+            "Partial deposit failed for investor in offer 2"
+        );
+        vm.stopPrank();
 
-//         // Set up withdrawal asset for the offer
-//     depositAsset = Asset({
-//     assetType: AssetType.ERC20, // Assuming assetType 0 represents some standard like ERC20
-//     assetAddress: address(USDC), // Example deposit asset address
-//     amount: defaultPrice, // Example deposit amount
-//     tokenId: 0, // No specific tokenId for this asset (since it's not an NFT)
-//     assetPrice: AssetPrice(address(ChainLinkMockUSDC), 0, 0) // Example price feed tuple
-// });
+        // Test invalid deposits: zero amount for offer1
+        vm.startPrank(user);
+        vm.expectRevert("Invalid amount");
+        lzybravault.deposit(0, 1, mint_amount);
+        vm.stopPrank();
 
-//      withdrawalAsset1 = Asset({
-//     assetType: AssetType.ERC20, // Assuming assetType 1 represents ERC20 or another type
-//     assetAddress: address(asset1), // Example withdrawal asset address
-//     amount: defaultPrice * 10, // Example withdrawal amount
-//     tokenId: 0, // No tokenId for the withdrawal asset
-//     assetPrice: AssetPrice(address(ChainLinkMockNVIDIA), 0, 0) // Example price feed tuple
-// });
+        // Test deposit with insufficient approval for offer2
+        vm.startPrank(user);
+        USDC.approve(address(lzybravault), amount / 2);
+        vm.expectRevert("ERC20: transfer amount exceeds allowance");
+        lzybravault.deposit(amount, 1, mint_amount);
+        vm.stopPrank();
 
-//     withdrawalAsset2 = Asset({
-//     assetType: AssetType.ERC20, // Assuming assetType 1 represents ERC20 or another type
-//     assetAddress: address(asset1), // Example withdrawal asset address
-//     amount: defaultPrice * 10, // Example withdrawal amount
-//     tokenId: 0, // No tokenId for the withdrawal asset
-//     assetPrice: AssetPrice(address(ChainLinkMockNVIDIA), 0, 0) // Example price feed tuple
-// });
+        // Test deposit exceeding allowed limit for offer1
+        vm.startPrank(user);
+        vm.expectRevert("Deposit exceeds allowed limit");
+        lzybravault.deposit(amount * 10, 1, mint_amount);
+        vm.stopPrank();
 
-//     withdrawalAsset3 = Asset({
-//     assetType: AssetType.ERC20, // Assuming assetType 1 represents ERC20 or another type
-//     assetAddress: address(asset1), // Example withdrawal asset address
-//     amount: defaultPrice * 10, // Example withdrawal amount
-//     tokenId: 0, // No tokenId for the withdrawal asset
-//     assetPrice: AssetPrice(address(ChainLinkMockMSCRF), 0, 0) // Example price feed tuple
-// });
-// offer = OfferStruct({
-//     takingOfferType: TakingOfferType.BlockOffer, // Example enum value (2) for BlockOffer
-//     offerPrice: OfferPrice({
-//         offerPricingType: OfferPricingType.FixedPricing, // Pricing type (FixedPricing)
-//         unitPrice: 10e18, // Setting the unit price to 10e18
-//         percentage: 0, // No percentage used
-//         percentageType: PercentageType.NoType // No percentage type used
-//     }),
-//     specialAddresses:  address()[1] , // Empty array for specialAddresses
-//     authorizationAddresses: address()[1] , // Array of 3 addresses
-//     expiryTimestamp: block.timestamp + 2 days, // Example expiry timestamp
-//     timelockPeriod: 0, // No timelock period
-//     terms: "tbd", // Placeholder for offer terms
-//     commsLink: "tbd" // Placeholder for communication link
-// });
+        // Test deposit attempt by non-whitelisted user for offer2
+        address nonWhitelistedUser = address(0x123);
+        vm.startPrank(nonWhitelistedUser);
+        USDC.approve(address(lzybravault), amount);
+        vm.expectRevert("User not whitelisted");
+        lzybravault.deposit(amount, 2, mint_amount);
+        vm.stopPrank();
+    }
 
-// // Set authorizationAddresses values for offer
-// offer.authorizationAddresses[0] = address(this);
-// offer.authorizationAddresses[1] = user;
-// offer.authorizationAddresses[2] = investor;
+     function testDepositWithMultiplePriceUpdates() public {
+        uint256 amount = 5 * 10 ** 18; // Amount to deposit
+        uint256 mintAmount = 20 * 10 ** 18; // Amount of LZYBRA tokens to mint
+        uint256 totalDeposited = 0; // Track total deposits for verification
 
+        // Mock deposits with different offers
+        for (uint8 i = 0; i < 3; i++) {
+            // Prepare the asset for deposit
+            Asset memory depositAsset = Asset({
+                assetType: AssetType.ERC20,
+                assetAddress: address(USDC),
+                amount: amount,
+                tokenId: 0,
+                assetPrice: AssetPrice(address(ChainLinkMockUSDC), 0, 0)
+            });
 
-// offer2 = OfferStruct({
-//     takingOfferType: TakingOfferType.BlockOffer, // Example enum value (2) for BlockOffer
-//     offerPrice: OfferPrice({
-//         offerPricingType: OfferPricingType.FixedPricing, // Pricing type (FixedPricing)
-//         unitPrice: 5e18, // Setting the unit price to 5e18
-//         percentage: 0, // No percentage used
-//         percentageType: PercentageType.NoType // No percentage type used
-//     }),
-//     specialAddresses: [] , // Array for specialAddresses
-//     authorizationAddresses: [] , // Array of 2 addresses
-//     expiryTimestamp: block.timestamp + 2 days, // Example expiry timestamp
-//     timelockPeriod: 0, // No timelock period
-//     terms: "tbd", // Placeholder for offer terms
-//     commsLink: "tbd" // Placeholder for communication link
-// });
+            // Prepare the offer structure
+            OfferStruct memory offer = OfferStruct({
+                takingOfferType: TakingOfferType.BlockOffer,
+                offerPrice: OfferPrice({
+                    offerPricingType: OfferPricingType.FixedPricing,
+                    unitPrice: (10 + (i * 5)) * 1e18, // Increment price for each offer
+                    percentage: 0,
+                    percentageType: PercentageType.NoType
+                }),
+                specialAddresses: [user, investor],
+                authorizationAddresses: [address(this), user, investor],
+                expiryTimestamp: block.timestamp + 2 days,
+                timelockPeriod: 0,
+                terms: string(abi.encodePacked("Offer ", i, " Terms")),
+                commsLink: string(abi.encodePacked("Offer ", i, " Link"))
+            });
 
-// // Set values for offer2
-// offer2.specialAddresses[0] = address(this);
-// offer2.authorizationAddresses[0] = user;
-// offer2.authorizationAddresses[1] = investor;
+            // User deposits and mints tokens
+            vm.startPrank(user);
+            USDC.approve(address(lzybravault), amount);
+            lzybravault.deposit(amount, i + 1, mintAmount);
+            totalDeposited += mintAmount;
+            assertEq(lzybra.balanceOf(user), totalDeposited, "Incorrect balance after deposit");
+            vm.stopPrank();
 
+            // Update price feeds after each deposit
+            lzybravault.updatePrice(id1 + i, (10 + (i * 5)) * 1e18, conf1, block.timestamp);
+        }
 
-// offer3 = OfferStruct({
-//     takingOfferType: TakingOfferType.BlockOffer, // Example enum value (2) for BlockOffer
-//     offerPrice: OfferPrice({
-//         offerPricingType: OfferPricingType.FixedPricing, // Pricing type (FixedPricing)
-//         unitPrice: 15e18, // Setting the unit price to 15e18
-//         percentage: 0, // No percentage used
-//         percentageType: PercentageType.NoType // No percentage type used
-//     }),
-//     specialAddresses:  address()[1] , // Array of 1 address
-//     authorizationAddresses:  address()[1] , // Array of 2 addresses
-//     expiryTimestamp: block.timestamp + 2 days, // Example expiry timestamp
-//     timelockPeriod: 0, // No timelock period
-//     terms: "tbd", // Placeholder for offer terms
-//     commsLink: "tbd" // Placeholder for communication link
-// });
+        // Verify the total deposited amount and correct balances
+        assertEq(lzybra.balanceOf(user), totalDeposited, "Total deposited balance mismatch");
+        assertEq(lzybra.totalSupply(), totalDeposited, "Total supply mismatch after multiple deposits");
 
-// // Set specialAddresses and authorizationAddresses for offer3
-// offer3.specialAddresses[0] = user;
-// offer3.authorizationAddresses[0] = user;
-// offer3.authorizationAddresses[1] = investor;
-
-
-//         dotcV2.makeOffer(depositAsset, withdrawalAsset1, offer);
-//         dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer2);
-//         dotcV2.makeOffer(depositAsset, withdrawalAsset3, offer3);
+        // Additional checks to ensure the logic holds after multiple deposits
+        uint256 expectedMintAmount = totalDeposited / 3; // Assume average minting calculation for validation
+        assertGt(expectedMintAmount, 0, "Expected mint amount should be greater than zero");
+    }
 
 
-//         uint256 amount = 2 *10**18;
-//         vm.startPrank(user);
-//         lzybravault.deposit(amount, withdrawalAsset1, 1);
-//         lzybravault.deposit(amount, withdrawalAsset2, 2);
+    // Additional security penetration tests for deposit
+    function testPenetrationAttempts() public {
+        // Attempt to deposit by bypassing checks
+        vm.startPrank(user);
 
-//     }
+        // Mock function call to a private/internal function
+        bytes memory payload = abi.encodeWithSignature("internalFunction()");
+        (bool success, ) = address(lzybravault).call(payload);
+        require(!success, "User bypassed private function"); // Using require for custom error message
 
-  
+        // Attempt to deposit more than available balance
+        USDC.approve(address(lzybravault), AMOUNT * 2);
+        vm.expectRevert("ERC20: transfer amount exceeds balance");
+        lzybravault.deposit(AMOUNT * 2, 1, AMOUNT);
 
- 
-// }
+        vm.stopPrank();
+    }
+}

@@ -36,7 +36,7 @@ interface ICurvePool{
     function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns(uint256);
 }
 
-contract ZybraConfigurator is Ownable {
+contract LybraConfigurator is Ownable {
     using SafeERC20 for IERC20;
     mapping(address => bool) public mintVault;
     mapping(address => uint256) public mintVaultMaxSupply;

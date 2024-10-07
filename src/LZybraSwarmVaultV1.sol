@@ -90,13 +90,13 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         address _lzybra,
         address _dotcv2,
         address _initialOwner,
-        address _coonfigurator,
+        address _configurator,
         address pythAddress
     ) Ownable(_initialOwner) {
         lybra = ILZYBRA(_lzybra);
         dotv2 = IDotcV2(_dotcv2);
         collateralAsset = IERC20(_collateralAsset);
-        configurator = Iconfigurator(_coonfigurator);
+        configurator = Iconfigurator(_configurator);
         pyth = IPyth(pythAddress);
     }
 
