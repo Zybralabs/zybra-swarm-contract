@@ -82,7 +82,7 @@ contract ZybraConfigurator is Ownable {
 
 
     //stableToken = USDC
-     constructor(address _dao, address _stableToken) {
+     constructor(address _dao, address _stableToken) Ownable(msg.sender) {
         redemptionFee = 50;
         flashloanFee = 500;
         maxStableRatio = 5_000;

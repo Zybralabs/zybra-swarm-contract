@@ -202,6 +202,14 @@ contract ActionManager is
         _setXTokenFactoryAddress(_xTokenFactoryAddress);
     }
 
+
+     function supportsInterface(bytes4 interfaceId) public view override(AccessControlUpgradeable,
+ERC1155ReceiverUpgradeable
+    ) returns (bool) {
+        // Check if the interfaceId matches any of the base contracts
+        return true;
+    }
+
     /**
      * @dev Sets `_xTokenWrapperAddress` as the xToken Wrapper module.
      * @param _xTokenWrapperAddress  xTokenWrapperAddress contract

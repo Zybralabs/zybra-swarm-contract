@@ -56,6 +56,12 @@ contract XTokenWrapper is AccessControl, ERC1155Holder {
         grantRole(REGISTRY_MANAGER_ROLE, _registryManager);
     }
 
+
+        function supportsInterface(bytes4 interfaceId) public view override(AccessControl, ERC1155Holder) returns (bool) {
+        // Check if the interfaceId matches any of the base contracts
+        return true;
+    }
+
     /**
      * @dev Registers a new xToken associated to the ERC20 which it will be wrapping.
      *
@@ -68,6 +74,9 @@ contract XTokenWrapper is AccessControl, ERC1155Holder {
      * @param _token The address of the ERC20 being wrapped.
      * @param _xToken The address of xToken.
      */
+
+     
+
     function registerToken(address _token, address _xToken) external {
         require(hasRole(REGISTRY_MANAGER_ROLE, _msgSender()), "must have registry manager role");
         require(_token != address(0), "token is the zero address");

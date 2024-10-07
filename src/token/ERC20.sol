@@ -18,12 +18,10 @@ contract ERC20 is Auth, IERC20Metadata, IERC20Permit {
     string public symbol;
     /// @inheritdoc IERC20Metadata
     uint8 public immutable decimals;
-    /// @inheritdoc IERC20
     uint256 public totalSupply;
 
     mapping(address => uint256) private balances;
 
-    /// @inheritdoc IERC20
     mapping(address => mapping(address => uint256)) public allowance;
     /// @inheritdoc IERC20Permit
     mapping(address => uint256) public nonces;
@@ -52,7 +50,6 @@ contract ERC20 is Auth, IERC20Metadata, IERC20Permit {
         return balances[user];
     }
 
-    /// @inheritdoc IERC20
     function balanceOf(address user) public view virtual returns (uint256) {
         return _balanceOf(user);
     }
@@ -77,7 +74,6 @@ contract ERC20 is Auth, IERC20Metadata, IERC20Permit {
     }
 
     // --- ERC20 Mutations ---
-    /// @inheritdoc IERC20
     function transfer(address to, uint256 value) public virtual returns (bool) {
         require(to != address(0) && to != address(this), "ERC20/invalid-address");
         uint256 balance = balanceOf(msg.sender);
@@ -94,7 +90,6 @@ contract ERC20 is Auth, IERC20Metadata, IERC20Permit {
         return true;
     }
 
-    /// @inheritdoc IERC20
     function transferFrom(address from, address to, uint256 value) public virtual returns (bool) {
         return _transferFrom(msg.sender, from, to, value);
     }
@@ -125,7 +120,6 @@ contract ERC20 is Auth, IERC20Metadata, IERC20Permit {
         return true;
     }
 
-    /// @inheritdoc IERC20
     function approve(address spender, uint256 value) external returns (bool) {
         allowance[msg.sender][spender] = value;
 

@@ -2,6 +2,6 @@
 @chainlink/contracts=node_modules/@chainlink/contracts
 @chainlink/contracts-ccip=node_modules/@chainlink/contracts-ccip
 solady=node_modules/solady
-@pythnetwork/pyth-sdk-solidity=@pythnetwork/pyth-sdk-solidity
+@pythnetwork/pyth-sdk-solidity=node_modules/@pythnetwork/pyth-sdk-solidity
 
 
