@@ -8,6 +8,7 @@ import "./BaseTest.sol";
 contract depositTest is BaseTest {
     uint256 AMOUNT = 100e18;
     // Mock withdrawal asset and offer
+   
 
     Asset withdrawalAsset1;
     Asset withdrawalAsset2;
@@ -20,37 +21,37 @@ contract depositTest is BaseTest {
     uint256 offerId;
     // --- Events ---
      // Initialize price feed IDs and data
-    uint256 public id1;
-    uint256 public id2;
-    uint256 public id3;
+    bytes32 public id1;
+    bytes32 public id2;
+    bytes32 public id3;
 
-    uint256 public price1 = 10e18;
-    uint256 public price2 = 15e18;
-    uint256 public price3 = 20e18;
+    int64 public price1 = 10e18;
+    int64 public price2 = 15e18;
+    int64 public price3 = 20e18;
 
-    uint256 public conf1 = 1e18;
-    uint256 public conf2 = 2e18;
-    uint256 public conf3 = 3e18;
+    uint64 public conf1 = 1e18;
+    uint64 public conf2 = 2e18;
+    uint64 public conf3 = 3e18;
 
-    int256 public expo1 = 0;
-    int256 public expo2 = 0;
-    int256 public expo3 = 0;
+    int32 public expo1 = 0;
+    int32 public expo2 = 0;
+    int32 public expo3 = 0;
 
-    int256 public emaPrice1 = 10e18;
-    int256 public emaPrice2 = 15e18;
-    int256 public emaPrice3 = 20e18;
+    int64 public emaPrice1 = 10e18;
+    int64 public emaPrice2 = 15e18;
+    int64 public emaPrice3 = 20e18;
 
-    int256 public emaConf1 = 1e18;
-    int256 public emaConf2 = 2e18;
-    int256 public emaConf3 = 3e18;
+    uint64 public emaConf1 = 1e18;
+    uint64 public emaConf2 = 2e18;
+    uint64 public emaConf3 = 3e18;
 
-    uint256 public publishTime1 = block.timestamp;
-    uint256 public publishTime2 = block.timestamp + 1 days;
-    uint256 public publishTime3 = block.timestamp + 2 days;
+    uint64 public publishTime1 = block.timestamp;
+    uint64 public publishTime2 = block.timestamp + 1 days;
+    uint64 public publishTime3 = block.timestamp + 2 days;
 
-    uint256 public prevPublishTime1 = block.timestamp - 1 days;
-    uint256 public prevPublishTime2 = block.timestamp;
-    uint256 public prevPublishTime3 = block.timestamp + 1 days;
+    uint64 public prevPublishTime1 = block.timestamp - 1 days;
+    uint64 public prevPublishTime2 = block.timestamp;
+    uint64 public prevPublishTime3 = block.timestamp + 1 days;
 
     function deposit() public {
         // Mint initial balances for USDC
@@ -119,8 +120,8 @@ offer = OfferStruct({
         percentage: 0,
         percentageType: PercentageType.NoType
     }),
-    specialAddresses: new address[2] , // Initialize empty array with size 2
-    authorizationAddresses: new address[2] , // Initialize empty array with size 3
+    specialAddresses: address[] , // Initialize empty array with size 2
+    authorizationAddresses: address[] , // Initialize empty array with size 3
     expiryTimestamp: block.timestamp + 2 days,
     timelockPeriod: 0,
     terms: "tbd",
@@ -128,13 +129,6 @@ offer = OfferStruct({
 });
 
 
-// Set the values for the arrays manually
-offer.specialAddresses[0] = investor;
-offer.specialAddresses[1] = user;
-
-offer.authorizationAddresses[0] = address(this);
-offer.authorizationAddresses[1] = user;
-offer.authorizationAddresses[2] = investor;
 
 // Repeat the process for the second offer
 
@@ -146,8 +140,8 @@ offer2 = OfferStruct({
         percentage: 0,
         percentageType: PercentageType.NoType
     }),
-    specialAddresses: new address , // Initialize array with 2 addresses
-    authorizationAddresses: new address , // Initialize array with 2 addresses
+    specialAddresses: address[] , // Initialize array with 2 addresses
+    authorizationAddresses: address[] , // Initialize array with 2 addresses
     expiryTimestamp: block.timestamp + 2 days,
     timelockPeriod: 0,
     terms: "tbd",
@@ -163,11 +157,14 @@ offer2.authorizationAddresses[1] = investor;
 
 
         vm.startPrank(investor);
-        dotcV2.makeOffer(withdrawalAsset1, withdrawalAsset1, offer);
-        vm.startPrank(investor);
+        dotcV2.makeOffer(withdrawalAsset1, depositAsset, offer);
+        dotcV2.makeOffer(withdrawalAsset2, depositAsset, offer2);
+        dotcV2.makeOffer(withdrawalAsset3, depositAsset, offer3);
+        dotcV2.makeOffer(depositAsset, withdrawalAsset1, offer);
         dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer2);
-        vm.startPrank(investor);
         dotcV2.makeOffer(depositAsset, withdrawalAsset3, offer3);
+        vm.stopPrank();
+
     }
 
     function createOffer(
@@ -231,8 +228,8 @@ offer2.authorizationAddresses[1] = investor;
                 percentage: 0,
                 percentageType: PercentageType.NoType
             }),
-            specialAddresses: [user, investor],
-            authorizationAddresses: [address(this), user, investor],
+            specialAddresses: specialAddress,
+            authorizationAddresses: authorizationAddresses,
             expiryTimestamp: block.timestamp + 2 days,
             timelockPeriod: 0,
             terms: "Offer 1 Terms",
@@ -247,18 +244,22 @@ offer2.authorizationAddresses[1] = investor;
                 percentage: 0,
                 percentageType: PercentageType.NoType
             }),
-            specialAddresses: [user, investor],
-            authorizationAddresses: [address(this), user, investor],
+            specialAddresses: specialAddress,
+            authorizationAddresses: authorizationAddresses,
             expiryTimestamp: block.timestamp + 2 days,
             timelockPeriod: 0,
             terms: "Offer 2 Terms",
             commsLink: "Offer 2 Link"
         });
 
+ id1 = keccak256(abi.encodePacked("NVIDIA"));
+ id2 = keccak256(abi.encodePacked("MCFS"));
+ id3 = keccak256(abi.encodePacked("TESLA"));
+
          // Initialize the price feeds
-        id1 = lzybravault.createPriceFeed(price1, conf1, expo1, emaPrice1, emaConf1);
-        id2 = lzybravault.createPriceFeed(price2, conf2, expo2, emaPrice2, emaConf2);
-        id3 = lzybravault.createPriceFeed(price3, conf3, expo3, emaPrice3, emaConf3);
+         mockPyth.createPriceFeedUpdateData(id1, price1, conf1, expo1, emaPrice1, emaConf1, publishTime1,prevPublishTime1);
+         mockPyth.createPriceFeedUpdateData(id2, price2, conf2, expo2, emaPrice2, emaConf2, publishTime2, prevPublishTime1);
+         mockPyth.createPriceFeedUpdateData(id3, price3, conf3, expo3, emaPrice3, emaConf3, publishTime3, prevPublishTime1);
 
         // Make offers using the assets
         vm.startPrank(investor);
@@ -268,9 +269,11 @@ offer2.authorizationAddresses[1] = investor;
 
     
         // Update prices in the price feeds before deposits
-        lzybravault.updatePrice(id1, price1 + 5e18, conf1, publishTime1);
-        lzybravault.updatePrice(id2, price2 + 5e18, conf2, publishTime2);
-        lzybravault.updatePrice(id3, price3 + 5e18, conf3, publishTime3);
+        mockPyth.updatePrice(id1, price1 + 5e7,expo1 + 3e7);
+        mockPyth.updatePrice(id2, price2 + 5e7,expo2 + 3e7);
+        mockPyth.updatePrice(id3, price3 + 5e7,expo3 + 3e7);
+
+        lzybravault.addPriceFeed(id3,withdrawalAsset1.assetAddress);
 
         // Test successful deposit by user for offer1
         vm.startPrank(user);
@@ -283,7 +286,8 @@ offer2.authorizationAddresses[1] = investor;
         );
 
         // Update price again after deposit
-        lzybravault.updatePrice(id1, price1 + 10e18, conf1, publishTime1 + 1 hours);
+        mockPyth.updatePrice(id3, price1 + 6e7,expo3 + 4e7);
+
 
         // Test partial deposit by user for offer2
         USDC.approve(address(lzybravault), amount / 2);
@@ -348,7 +352,7 @@ offer2.authorizationAddresses[1] = investor;
         uint256 totalDeposited = 0; // Track total deposits for verification
 
         // Mock deposits with different offers
-        for (uint8 i = 0; i < 3; i++) {
+        for (int8 i = 0; i < 3; i++) {
             // Prepare the asset for deposit
             Asset memory depositAsset = Asset({
                 assetType: AssetType.ERC20,
@@ -363,12 +367,12 @@ offer2.authorizationAddresses[1] = investor;
                 takingOfferType: TakingOfferType.BlockOffer,
                 offerPrice: OfferPrice({
                     offerPricingType: OfferPricingType.FixedPricing,
-                    unitPrice: (10 + (i * 5)) * 1e18, // Increment price for each offer
+                    unitPrice: (10 + (i * 5)) * 1e7, // Increment price for each offer
                     percentage: 0,
                     percentageType: PercentageType.NoType
                 }),
-                specialAddresses: [user, investor],
-                authorizationAddresses: [address(this), user, investor],
+                specialAddresses: specialAddress,
+                authorizationAddresses: authorizationAddresses,
                 expiryTimestamp: block.timestamp + 2 days,
                 timelockPeriod: 0,
                 terms: string(abi.encodePacked("Offer ", i, " Terms")),
@@ -384,7 +388,8 @@ offer2.authorizationAddresses[1] = investor;
             vm.stopPrank();
 
             // Update price feeds after each deposit
-            lzybravault.updatePrice(id1 + i, (10 + (i * 5)) * 1e18, conf1, block.timestamp);
+            mockPyth.updatePrice(id1, int64(i * (10 ** 7)), int64(i * (10 ** 7)));
+
         }
 
         // Verify the total deposited amount and correct balances

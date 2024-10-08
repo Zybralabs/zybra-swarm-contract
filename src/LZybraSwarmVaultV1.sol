@@ -109,22 +109,17 @@ contract LzybraVault is Ownable, ReentrancyGuard {
      * - `withdrawalAsset` withdrawal Asset details in Asset struct
      * - `offer` offers details in OfferStruct struct
      */
-
     function deposit(
         uint256 assetAmount,
         Asset calldata withdrawalAsset,
         OfferStruct calldata offer
-    ) external virtual onlyExistingAsset(withdrawalAsset.assetAddress) {
+    ) external virtual onlyExistingAsset(withdrawalAsset.assetAddress) nonReentrant {
         require(assetAmount > 0, "Deposit amount must be greater than 0");
 
         // Transfer collateral to the contract
-        collateralAsset.safeTransferFrom(
-            msg.sender,
-            address(this),
-            assetAmount
-        );
+        collateralAsset.safeTransferFrom(msg.sender, address(this), assetAmount);
 
-        // Approve the DOTC contract to handle the transferred amount
+      
         collateralAsset.approve(address(dotv2), assetAmount);
 
         // Create an Asset struct for the deposit
@@ -154,9 +149,10 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             withdrawalAsset.assetAddress
         );
 
+        // Emit the DepositAsset event after state changes
         emit DepositAsset(msg.sender, address(collateralAsset), assetAmount);
     }
-
+}
         /**
      * @notice Deposit USDC, update the interest distribution, can mint LZybra directly
      * Emits a `DepositAsset` event.
@@ -167,18 +163,21 @@ contract LzybraVault is Ownable, ReentrancyGuard {
      * - `mintAmount` mint amount of lzybra
      */
 
+
     function deposit(
         uint256 assetAmount,
         uint256 offerId,
         uint256 mintAmount
-    ) external virtual {
+    ) external virtual nonReentrant {
+        // Ensure asset amount is greater than zero
         require(assetAmount > 0, "Deposit amount must be greater than 0");
     
         DotcOffer memory offer = dotv2.allOffers(offerId);
-         require(
+        require(
             ASSET_ORACLE[offer.withdrawalAsset.assetAddress] != bytes32(0),
             "Asset not found in our list."
         );
+
         // Transfer collateral to the contract
         IERC20(offer.withdrawalAsset.assetAddress).safeTransferFrom(
             msg.sender,
@@ -187,28 +186,30 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         );
 
         // Approve the DOTC contract to handle the transferred amount
-        IERC20(offer.withdrawalAsset.assetAddress).approve(
+        // Using a fixed allowance to avoid potential race conditions
+        IERC20(offer.withdrawalAsset.assetAddress).safeApprove(
             address(dotv2),
             assetAmount
         );
 
         // Create the offer in dotv2
         dotv2.takeOfferFixed(offerId, assetAmount, address(this));
-        Asset memory usdc_asset = Asset({
+
+
+        // Fetch the price of the withdrawal asset and the exchange rate
+        (uint256 depositToWithdrawalRate, ) = getAssetPrice(
+            Asset({
             assetType: AssetType.ERC20,
             assetAddress: address(collateralAsset),
             amount: assetAmount,
             tokenId: 0,
             assetPrice: AssetPrice(usdc_price_feed, 0, 0)
-        });
-        // Fetch the price of the withdrawal asset and the exchange rate
-        // Fix offerId
-        (uint256 depositToWithdrawalRate, ) = getAssetPrice(
-            usdc_asset,
+        }),
             offer.withdrawalAsset,
             offer.offer.offerPrice
         );
-        // Mint lybra tokens based on the asset price and deposit amount
+
+        // Mint LZYBRA tokens based on the asset price and deposit amount
         _mintLZYBRA(
             msg.sender,
             mintAmount,
@@ -216,6 +217,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             offer.withdrawalAsset.assetAddress
         );
 
+        // Emit deposit event
         emit DepositAsset(msg.sender, address(collateralAsset), assetAmount);
     }
 
@@ -270,7 +272,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     uint256 assetAmount,
     Asset calldata asset,
     bytes[] calldata priceUpdate
-) external payable onlyExistingAsset(asset.assetAddress) {
+) external payable onlyExistingAsset(asset.assetAddress) nonReentrant {
     // Fetch asset price and collateral ratio
     uint256 assetPrice = getAssetPriceOracle(asset.assetAddress, priceUpdate);
     address assetAddress = asset.assetAddress;
@@ -278,6 +280,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     // Calculate collateral value and borrowed value
     uint256 collateralValue = UserAsset[onBehalfOf][assetAddress] * assetPrice;
     uint256 borrowedValue = getBorrowed(onBehalfOf, assetAddress);
+     require(borrowedValue > 0, "Borrowed value must be greater than zero");
     uint256 onBehalfOfCollateralRatio = (collateralValue * 100) / borrowedValue;
 
     // Check liquidation limits
@@ -392,14 +395,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             "Withdraw Asset not USDC."
         );
         require(
-            userAsset >= amountToSend && userAsset > 0,
+            userAsset >= amountToSend,
             "Withdraw amount exceeds User Assets."
-        );
-
-        (uint256 assetRate, ) = getAssetPrice(
-            offer.depositAsset,
-            offer.withdrawalAsset,
-            offer.offer.offerPrice
         );
 
         // Check health only if there are borrowed assets
@@ -407,6 +404,14 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             _checkHealth(_provider, depositAssetAddr, assetRate);
         }
 
+
+        (uint256 assetRate, ) = getAssetPrice(
+            offer.depositAsset,
+            offer.withdrawalAsset,
+            offer.offer.offerPrice
+        );
+
+        
         // Calculate receiving amount based on offer conditions
         uint256 receivingAmount = amountToSend != offer.withdrawalAsset.amount
             ? offer.depositAsset.unstandardize(
@@ -468,9 +473,15 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             "Withdraw Asset not USDC."
         );
         require(
-            userAsset >= amountToSend && userAsset > 0,
+            userAsset >= amountToSend,
             "Withdraw amount exceeds User Assets."
         );
+        
+        // Check health only if there are borrowed assets
+        if (getBorrowed(_provider, depositAssetAddr) > 0) {
+            _checkHealth(_provider, depositAssetAddr, assetRate);
+        }
+
 
         (uint256 assetRate, ) = getAssetPrice(
             offer.depositAsset,
@@ -478,11 +489,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             offer.offer.offerPrice
         );
 
-        // Check health only if there are borrowed assets
-        if (getBorrowed(_provider, depositAssetAddr) > 0) {
-            _checkHealth(_provider, depositAssetAddr, assetRate);
-        }
-
+    
         // Call external function at the end of state manipulations
         dotv2.takeOfferDynamic(
             offerId,
@@ -524,6 +531,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             depositAssetAddr,
             receivingAmount - fee
         );
+    }
+
+
+    function addPriceFeed(address _asset, bytes32 priceId) public virtual onlyOwner{
+        
+        ASSET_ORACLE[_asset] = priceId;
     }
     /**
      * @dev Get USD value of current collateral asset and minted lybra through price oracle / Collateral asset USD value must higher than safe Collateral Ratio.

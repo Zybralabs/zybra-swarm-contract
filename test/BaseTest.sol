@@ -36,6 +36,9 @@ contract BaseTest is Deployer, Test {
     mockChainlink public ChainLinkMockUSDC;
     mockChainlink public ChainLinkMockNVIDIA;
     mockChainlink public ChainLinkMockMSCRF;
+        // deploy mock adapters
+         address[] specialAddress = new address[](4);
+    address[] authorizationAddresses = new address[](2);
     AssetTokenData assetTokenData;
     AssetToken public asset1;
     AssetToken public asset2;
@@ -46,6 +49,7 @@ contract BaseTest is Deployer, Test {
     ERC20 public USDC;
     LybraConfigurator public configurator;
     LzybraVault public lzybravault;
+    MockPyth public mockPyth;
     Lzybra public lzybra;
     address self = address(this);
     address fee = makeAddr("fee");
@@ -75,8 +79,17 @@ contract BaseTest is Deployer, Test {
         // deploy core src
         deploy(address(this));
 
-        // deploy mock adapters
+    
 
+    specialAddress[0] = user;
+    specialAddress[1] = investor;
+    specialAddress[2] = self;
+    specialAddress[3] = randomUser;
+
+    authorizationAddresses[0] = user;
+    authorizationAddresses[1] = investor;
+    authorizationAddresses[2] = self;
+    authorizationAddresses[3] = randomUser;
         adapter1 = new MockAdapter(address(gateway));
         adapter2 = new MockAdapter(address(gateway));
         adapter3 = new MockAdapter(address(gateway));
@@ -123,8 +136,7 @@ contract BaseTest is Deployer, Test {
         uint validTimePeriod = 3600; // Example valid time period
         uint singleUpdateFeeInWei = 0.01 ether; // Example update fee
 
-        vm.startBroadcast(); // Start broadcasting the transaction
-        MockPyth mockPyth = new MockPyth(validTimePeriod, singleUpdateFeeInWei);
+         mockPyth = new MockPyth(validTimePeriod, singleUpdateFeeInWei);
          configurator = new LybraConfigurator(address(this), address(USDC));
 
         lzybravault = new LzybraVault(address(lzybra),address(dotcV2),address(USDC), address(self),address(configurator), address(mockPyth));
