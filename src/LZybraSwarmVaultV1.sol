@@ -152,7 +152,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         // Emit the DepositAsset event after state changes
         emit DepositAsset(msg.sender, address(collateralAsset), assetAmount);
     }
-}
+
         /**
      * @notice Deposit USDC, update the interest distribution, can mint LZybra directly
      * Emits a `DepositAsset` event.
@@ -187,7 +187,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         // Approve the DOTC contract to handle the transferred amount
         // Using a fixed allowance to avoid potential race conditions
-        IERC20(offer.withdrawalAsset.assetAddress).safeApprove(
+        IERC20(offer.withdrawalAsset.assetAddress).approve(
             address(dotv2),
             assetAmount
         );
@@ -399,10 +399,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             "Withdraw amount exceeds User Assets."
         );
 
-        // Check health only if there are borrowed assets
-        if (getBorrowed(_provider, depositAssetAddr) > 0) {
-            _checkHealth(_provider, depositAssetAddr, assetRate);
-        }
+        
 
 
         (uint256 assetRate, ) = getAssetPrice(
@@ -411,7 +408,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             offer.offer.offerPrice
         );
 
-        
+        // Check health only if there are borrowed assets
+        if (getBorrowed(_provider, depositAssetAddr) > 0) {
+            _checkHealth(_provider, depositAssetAddr, assetRate);
+        }
+
+
         // Calculate receiving amount based on offer conditions
         uint256 receivingAmount = amountToSend != offer.withdrawalAsset.amount
             ? offer.depositAsset.unstandardize(
@@ -478,9 +480,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         );
         
         // Check health only if there are borrowed assets
-        if (getBorrowed(_provider, depositAssetAddr) > 0) {
-            _checkHealth(_provider, depositAssetAddr, assetRate);
-        }
+       
 
 
         (uint256 assetRate, ) = getAssetPrice(
@@ -489,7 +489,9 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             offer.offer.offerPrice
         );
 
-    
+     if (getBorrowed(_provider, depositAssetAddr) > 0) {
+            _checkHealth(_provider, depositAssetAddr, assetRate);
+        }
         // Call external function at the end of state manipulations
         dotv2.takeOfferDynamic(
             offerId,

@@ -37,7 +37,7 @@ contract BaseTest is Deployer, Test {
     mockChainlink public ChainLinkMockNVIDIA;
     mockChainlink public ChainLinkMockMSCRF;
         // deploy mock adapters
-         address[] specialAddress = new address[](4);
+    address[] specialAddress = new address[](4);
     address[] authorizationAddresses = new address[](2);
     AssetTokenData assetTokenData;
     AssetToken public asset1;
