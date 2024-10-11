@@ -2,11 +2,14 @@
 src = "src"
 out = "out"
 solc_version = "0.8.19"  # default version
-viaIR=true
 [profile.solidity]
 version = ["0.8.19", "0.8.19", "0.8.19"]  # add other versions as needed
 libs = ["lib"]
+[profile.test]
+src = 'out'
 remappings = [
    '@openzeppelin/=lib/openzeppelin-contracts/',
     'lib/openzeppelin-contracts-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/'
 ]
+[dependencies]
+forge-std = "1.2.0"
