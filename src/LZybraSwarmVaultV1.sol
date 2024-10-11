@@ -179,7 +179,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         );
 
         // Transfer collateral to the contract
-        IERC20(offer.withdrawalAsset.assetAddress).safeTransferFrom(
+        collateralAsset.safeTransferFrom(
             msg.sender,
             address(this),
             assetAmount
@@ -187,7 +187,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         // Approve the DOTC contract to handle the transferred amount
         // Using a fixed allowance to avoid potential race conditions
-        IERC20(offer.withdrawalAsset.assetAddress).safeApprove(
+        collateralAsset.approve(
             address(dotv2),
             assetAmount
         );
@@ -615,7 +615,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
   function getAssetPriceOracle(
     address _asset,
     bytes[] calldata priceUpdate
-) public returns (uint256) {
+) public payable returns (uint256) {
     // Calculate the fee required to update the price
     uint fee = pyth.getUpdateFee(priceUpdate);
     
