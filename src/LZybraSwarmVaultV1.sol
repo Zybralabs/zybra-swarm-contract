@@ -50,8 +50,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     uint256 poolTotalCirculation;
 
     mapping(address => mapping(address => uint256)) public UserAsset; // User withdraw request tranche asset amount
-    mapping(address => mapping(address => uint256)) borrowed;
-    mapping(address => uint256) feeStored;
+    mapping(address => mapping(address => uint256)) public borrowed;
+    mapping(address => uint256) public feeStored;
     mapping(address => uint256) feeUpdatedAt;
     mapping(address => bytes32) public ASSET_ORACLE;
 
@@ -120,7 +120,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         collateralAsset.safeTransferFrom(msg.sender, address(this), assetAmount);
 
       
-        collateralAsset.approve(address(dotv2), assetAmount);
+          // Approve DOTC contract only if needed
+        _approveIfNeeded(address(collateralAsset),address(dotv2), assetAmount);
 
         // Create an Asset struct for the deposit
         Asset memory usdc_asset = Asset({
@@ -185,12 +186,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             assetAmount
         );
 
-        // Approve the DOTC contract to handle the transferred amount
-        // Using a fixed allowance to avoid potential race conditions
-        collateralAsset.approve(
-            address(dotv2),
-            assetAmount
-        );
+        bool success = collateralAsset.safeIncreaseAllowance(spender, amount - currentAllowance);
+    require(success, "Approval failed");
 
         // Create the offer in dotv2
         dotv2.takeOfferFixed(offerId, assetAmount, address(this));
@@ -297,7 +294,6 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     uint256 LZYBRAAmount = (assetAmount * assetPrice) / 1e18;
 
     // Redeem user's collateral and repay their debt
-    _repay(provider, onBehalfOf, assetAddress, LZYBRAAmount);
 
     // Calculate reduced asset based on collateral ratio
     uint256 reducedAsset = assetAmount;
@@ -316,6 +312,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         IERC20(assetAddress).safeTransfer(msg.sender, reward2keeper); // Reward keeper
     }
 
+    _repay(provider, onBehalfOf, assetAddress, LZYBRAAmount, reducedAsset - reward2keeper);
     // Transfer the remaining reduced asset to the provider
     IERC20(assetAddress).safeTransfer(provider, reducedAsset - reward2keeper);
 
@@ -360,20 +357,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         uint256 _amount
     ) internal virtual {
         _updateFee(_onBehalfOf,asset);
-        uint256 totalFee = feeStored[_onBehalfOf];
-        uint256 amount = borrowed[_onBehalfOf][asset] + totalFee >= _amount
-            ? _amount
-            : borrowed[_onBehalfOf][asset] + totalFee;
-        if (amount > totalFee) {
-            feeStored[_onBehalfOf] = 0;
-            lybra.transferFrom(_provider, address(configurator), totalFee);
-            lybra.burn(_provider, amount - totalFee);
-            borrowed[_onBehalfOf][asset] -= amount - totalFee;
-            poolTotalCirculation -= amount - totalFee;
-        } else {
-            feeStored[_onBehalfOf] = totalFee - amount;
-            lybra.transferFrom(_provider, address(configurator), amount);
-        }
+       
+            lybra.transferFrom(_provider, address(configurator), _amount);
+            lybra.burn(_provider, _amount);
+            borrowed[_onBehalfOf][asset] -= _amount;
+            poolTotalCirculation -= _amount ;
+
         try configurator.distributeRewards() {} catch {}
         emit Burn(_provider, _onBehalfOf, amount);
     }
@@ -399,13 +388,20 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             "Withdraw amount exceeds User Assets."
         );
 
-        
 
+        _approveIfNeeded(depositAssetAddr,address(dotv2), amountToSend);
 
         (uint256 assetRate, ) = getAssetPrice(
             offer.depositAsset,
             offer.withdrawalAsset,
             offer.offer.offerPrice
+        );
+
+         _repay(
+            msg.sender,
+            _provider,
+            depositAssetAddr,
+            calc_share(amountToSend, depositAssetAddr, msg.sender)
         );
 
         // Check health only if there are borrowed assets
@@ -431,12 +427,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         dotv2.takeOfferFixed(offerId, amountToSend, _provider);
 
         // Calculate and repay lybra
-        _repay(
-            msg.sender,
-            _provider,
-            depositAssetAddr,
-            calc_share(amountToSend, depositAssetAddr, msg.sender)
-        );
+       
 
         // Update user balance in storage
         unchecked {
@@ -479,14 +470,20 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             "Withdraw amount exceeds User Assets."
         );
         
-        // Check health only if there are borrowed assets
-       
-
-
+    
+        _approveIfNeeded(depositAssetAddr,address(dotv2), assetAmount);
         (uint256 assetRate, ) = getAssetPrice(
             offer.depositAsset,
             offer.withdrawalAsset,
             offer.offer.offerPrice
+        );
+
+        // Check health only if there are borrowed assets
+         _repay(
+            _provider,
+            _provider,
+            depositAssetAddr,
+            calc_share(amountToSend, depositAssetAddr, _provider)
         );
 
      if (getBorrowed(_provider, depositAssetAddr) > 0) {
@@ -510,22 +507,17 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         require(receivingAmount > fee, "TZA");
 
         // Calculate and repay lybra
-        _repay(
-            msg.sender,
-            _provider,
-            depositAssetAddr,
-            calc_share(amountToSend, depositAssetAddr, msg.sender)
-        );
 
-        // Update user balance in storage
-        unchecked {
+          unchecked {
             UserAsset[_provider][depositAssetAddr] =
                 userAsset -
                 amountToSend;
         }
 
         // Transfer remaining collateral minus fee
-        collateralAsset.safeTransfer(_provider, receivingAmount - fee);
+        collateralAsset.safeTransfer(msg.sender, receivingAmount - fee);
+        // Update user balance in storage
+       
 
         // Emit event, calculating received amount inline
         emit WithdrawAsset(
@@ -573,6 +565,18 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             (86_400 * 365) /
             10_000;
     }
+
+       /**
+     * @dev Approve tokens only if allowance is insufficient.
+     */
+    function _approveIfNeeded(address asset, address spender, uint256 amount) internal {
+        uint256 currentAllowance = IERC20(asset).allowance(address(this), spender);
+        if (currentAllowance < amount) {
+           bool success = IERC20(asset).safeIncreaseAllowance(spender, amount - currentAllowance);
+            require(success, "Approval failed");
+        }
+    }
+
 
     /**
      * @dev Returns the current borrowing amount for the user, including borrowed shares and accumulated fees.

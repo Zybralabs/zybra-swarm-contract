@@ -3,7 +3,7 @@ src = "src"
 out = "out"
 solc_version = "0.8.19"  # default version
 [profile.solidity]
-version = ["0.8.19", "0.8.19", "0.8.19"]  # add other versions as needed
+version = ["0.8.19", "0.8.20", "0.8.1"]  # add other versions as needed
 libs = ["lib"]
 [profile.test]
 src = 'out'

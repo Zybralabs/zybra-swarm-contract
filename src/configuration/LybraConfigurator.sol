@@ -56,6 +56,7 @@ contract LybraConfigurator is Ownable {
     IlzybraMiningIncentives public lzybraMiningIncentives;
     IProtocolRewardsPool public ZybraProtocolRewardsPool;
     ILZYBRA public lzybra;
+    ILZYBRA public lzybra;
     uint256 public flashloanFee;
     // Limiting the maximum percentage of lzybra that can be cross-chain transferred to L2 in relation to the total supply.
     uint256 maxStableRatio;
@@ -281,11 +282,11 @@ contract LybraConfigurator is Ownable {
      * @dev The protocol rewards amount is notified to the ZybraProtocolRewardsPool for proper reward allocation.
      */
     function distributeRewards() external {
-        uint256 lzybraBalance = lzybra.balanceOf(address(this));
-        if(lzybraBalance >= 1e21) {
-            lzybra.transfer(address(ZybraProtocolRewardsPool), lzybraBalance);
-            ZybraProtocolRewardsPool.notifyRewardAmount(lzybraBalance, 0);
-            emit SendProtocolRewards(address(lzybra), lzybraBalance, block.timestamp);
+        uint256 USDBalance = IERC20(stableToken).balanceOf(address(this));
+        if(USDBalance >= 1e21) {
+            IERC20(stableToken).transfer(address(ZybraProtocolRewardsPool), USDBalance);
+            ZybraProtocolRewardsPool.notifyRewardAmount(USDBalance, 0);
+            emit SendProtocolRewards(address(stableToken), USDBalance, block.timestamp);
         }
     }
 
