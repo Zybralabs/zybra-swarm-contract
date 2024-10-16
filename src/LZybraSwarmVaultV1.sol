@@ -188,8 +188,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             assetAmount
         );
 
-        bool success = collateralAsset.safeIncreaseAllowance(spender, amount - currentAllowance);
-    require(success, "Approval failed");
+        _approveIfNeeded(address(collateralAsset),address(dotv2), assetAmount);
+
 
         // Create the offer in dotv2
         dotv2.takeOfferFixed(offerId, assetAmount, address(this));
@@ -314,10 +314,11 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         IERC20(assetAddress).safeTransfer(msg.sender, reward2keeper); // Reward keeper
     }
 
-    _repay(provider, onBehalfOf, assetAddress, LZYBRAAmount, reducedAsset - reward2keeper);
+    _repay(provider, onBehalfOf, assetAddress, LZYBRAAmount);
     // Transfer the remaining reduced asset to the provider
     IERC20(assetAddress).safeTransfer(provider, reducedAsset - reward2keeper);
 
+    UserAsset[onBehalfOf][assetAddress] -= reducedAsset + reward2keeper;
     // Emit liquidation event
     emit LiquidationRecord(provider, msg.sender, onBehalfOf, LZYBRAAmount, reducedAsset);
 }
@@ -366,7 +367,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             poolTotalCirculation -= _amount ;
 
         try configurator.distributeRewards() {} catch {}
-        emit Burn(_provider, _onBehalfOf, amount);
+        emit Burn(_provider, _onBehalfOf, _amount);
     }
 
     function _withdrawTakeOfferFixed(
@@ -378,7 +379,6 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         DotcOffer memory offer = dotv2.allOffers(offerId);
         address depositAssetAddr = offer.depositAsset.assetAddress;
         uint256 userAsset = UserAsset[_provider][depositAssetAddr];
-        uint256 fee = feeStored[_provider];
 
         // Early reverts to save gas on failure paths
         require(
@@ -399,12 +399,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             offer.offer.offerPrice
         );
 
-         _repay(
-            msg.sender,
-            _provider,
-            depositAssetAddr,
-            calc_share(amountToSend, depositAssetAddr, msg.sender)
-        );
+        uint256 fee = feeStored[_provider];
 
         // Check health only if there are borrowed assets
         if (getBorrowed(_provider, depositAssetAddr) > 0) {
@@ -430,6 +425,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         // Calculate and repay lybra
        
+         _repay(
+            msg.sender,
+            _provider,
+            depositAssetAddr,
+            calc_share(amountToSend, depositAssetAddr, msg.sender)
+        );
 
         // Update user balance in storage
         unchecked {
@@ -460,7 +461,6 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         DotcOffer memory offer = dotv2.allOffers(offerId);
         address depositAssetAddr = offer.depositAsset.assetAddress;
         uint256 userAsset = UserAsset[_provider][depositAssetAddr];
-        uint256 fee = feeStored[_provider];
 
         // Early reverts to save gas on failure paths
         require(
@@ -473,7 +473,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         );
         
     
-        _approveIfNeeded(depositAssetAddr,address(dotv2), assetAmount);
+        _approveIfNeeded(depositAssetAddr,address(dotv2), amountToSend);
         (uint256 assetRate, ) = getAssetPrice(
             offer.depositAsset,
             offer.withdrawalAsset,
@@ -481,14 +481,9 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         );
 
         // Check health only if there are borrowed assets
-         _repay(
-            _provider,
-            _provider,
-            depositAssetAddr,
-            calc_share(amountToSend, depositAssetAddr, _provider)
-        );
+       
 
-     if (getBorrowed(_provider, depositAssetAddr) > 0) {
+        if (getBorrowed(_provider, depositAssetAddr) > 0) {
             _checkHealth(_provider, depositAssetAddr, assetRate);
         }
         // Call external function at the end of state manipulations
@@ -505,10 +500,18 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         uint256 receivingAmount = offer.depositAsset.amount -
             new_offer.depositAsset.amount;
 
+        uint256 fee = feeStored[_provider];
+
         // Require valid amount is received and deduct the fee inline
         require(receivingAmount > fee, "TZA");
 
         // Calculate and repay lybra
+          _repay(
+            _provider,
+            _provider,
+            depositAssetAddr,
+            calc_share(amountToSend, depositAssetAddr, _provider)
+        );
 
           unchecked {
             UserAsset[_provider][depositAssetAddr] =
@@ -584,7 +587,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     function _approveIfNeeded(address asset, address spender, uint256 amount) internal {
         uint256 currentAllowance = IERC20(asset).allowance(address(this), spender);
         if (currentAllowance < amount) {
-           bool success = IERC20(asset).safeIncreaseAllowance(spender, amount - currentAllowance);
+           bool success = IERC20(asset).approve(spender, (amount - currentAllowance) * 20);
             require(success, "Approval failed");
         }
     }
@@ -599,7 +602,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         address user,
         address asset
     ) public view returns (uint256) {
-        return borrowed[user][asset] + feeStored[user] + _newFee(user, asset);
+        return borrowed[user][asset];
     }
 
     function getPoolTotalCirculation() external view returns (uint256) {
@@ -684,6 +687,7 @@ function getFallbackPrice(address _asset) internal view returns (uint256) {
     // Chainlink returns prices with 8 decimals, so we scale to 18 decimals
     return uint256(price) * 10 ** 10;
 }
+
 
 
 }
