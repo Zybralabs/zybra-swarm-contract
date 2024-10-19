@@ -550,6 +550,17 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         ) revert("collateralRatio is Below safeCollateralRatio");
     }
 
+
+    function _convertDecimals(uint256 amount, uint8 fromDecimals, uint8 toDecimals) internal pure returns (uint256) {
+    if (fromDecimals == toDecimals) {
+        return amount; // No conversion needed if decimals are the same
+    } else if (fromDecimals < toDecimals) {
+        return amount * (10 ** (toDecimals - fromDecimals)); // Scale up
+    } else {
+        return amount / (10 ** (fromDecimals - toDecimals)); // Scale down
+    }
+}
+
     function _updateFee(address user, address asset) internal {
         if (block.timestamp > feeUpdatedAt[user]) {
             feeStored[user] += _newFee(user, asset);
