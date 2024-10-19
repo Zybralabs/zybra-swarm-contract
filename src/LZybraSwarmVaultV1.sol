@@ -573,13 +573,16 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
     // Fetch the withdrawal asset amount the maker should receive
     uint256 receivedWithdrawalAmount = offer.withdrawalAsset.amount;
-
+    address asset = offer.withdrawalAsset.assetAddress;
     // Update the user's asset balance in UserAsset mapping
-    UserAsset[msg.sender][offer.withdrawalAsset.assetAddress] += receivedWithdrawalAmount;
+    UserAsset[msg.sender][asset] += receivedWithdrawalAmount;
     UserAsset[msg.sender][address(collateralAsset)] = 0;
+    _updateFee(msg.sender, asset);
+    borrowed[msg.sender][asset] += borrowed[msg.sender][address(collateralAsset)];
+    borrowed[msg.sender][address(collateralAsset)] = 0;
 
     // Emit an event for claiming the assets
-    emit OfferClaimed(msg.sender, offerId, offer.withdrawalAsset.assetAddress, receivedWithdrawalAmount);
+    emit OfferClaimed(msg.sender, offerId, asset, receivedWithdrawalAmount);
 }
 
 
