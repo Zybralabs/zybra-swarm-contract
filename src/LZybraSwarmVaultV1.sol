@@ -5,6 +5,7 @@ pragma solidity ^0.8.19;
 import "./interfaces/Iconfigurator.sol";
 import "./interfaces/ILZYBRA.sol";
 import "./interfaces/IDotcV2.sol";
+import "./interfaces/AggregatorV2V3Interface.sol";
 import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -46,6 +47,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     Iconfigurator public configurator;
     IDotcV2 public dotv2;
     IPyth public pyth;
+    AggregatorV2V3Interface internal priceFeed;
     IERC20 public collateralAsset;
     uint256 poolTotalCirculation;
 
@@ -531,10 +533,20 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
 
-    function addPriceFeed(address _asset, bytes32 priceId) public virtual onlyOwner{
-        
-        ASSET_ORACLE[_asset] = priceId;
+     function addPriceFeed(
+    address _asset, 
+    bytes32 pythPriceId, 
+    address chainlinkAggregator
+) public virtual onlyOwner {
+    // Set the Pyth price feed ID for the asset
+    ASSET_ORACLE[_asset] = pythPriceId;
+
+    // Set the Chainlink price feed address for the asset if provided
+    if (chainlinkAggregator != address(0)) {
+        chainlinkOracles[_asset] = chainlinkAggregator;
     }
+}
+
     /**
      * @dev Get USD value of current collateral asset and minted lybra through price oracle / Collateral asset USD value must higher than safe Collateral Ratio.
      */
@@ -632,26 +644,61 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             );
     }
 
-  function getAssetPriceOracle(
+function getAssetPriceOracle(
     address _asset,
     bytes[] calldata priceUpdate
 ) public payable returns (uint256) {
     // Calculate the fee required to update the price
     uint fee = pyth.getUpdateFee(priceUpdate);
-    
-    // Update the price feeds
-    pyth.updatePriceFeeds{value: fee}(priceUpdate);
 
-    // Fetch the price as int64
-    int64 priceInt = pyth.getPriceNoOlderThan(ASSET_ORACLE[_asset], 60).price;
+    // Update the price feeds - Pyth's contract will verify signatures internally
+    try pyth.updatePriceFeeds{value: fee}(priceUpdate) {
+        // No additional signature check needed since Pyth already performs this
+    } catch {
+        revert("Invalid or tampered price update.");
+    }
+
+    int64 priceInt;
+
+    // Attempt to get the primary price feed from Pyth (Pyth returns prices with 8 decimals)
+    try pyth.getPriceNoOlderThan(ASSET_ORACLE[_asset], 60) returns (PythStructs.Price memory priceData) {
+        priceInt = priceData.price;
+    } catch {
+        // Fallback mechanism: use Chainlink price if available
+        return getFallbackPrice(_asset);
+    }
 
     // Ensure the price is non-negative
     require(priceInt >= 0, "Price cannot be negative.");
 
-    // Convert to uint256 safely and return the price
-     return uint256(int256(priceInt)) * 10 ** 12;
+    // Pyth returns prices with 8 decimals, scale to 18 decimals
+    uint256 scaledPrice = uint256(int256(priceInt)) * 10 ** 10;
 
+    // Return the price in 18 decimals
+    return scaledPrice;
 }
+
+// Fallback price function for Chainlink (already 8 decimals)
+function getFallbackPrice(address _asset) internal view returns (uint256) {
+    // Get the Chainlink oracle address for the asset
+    address chainlinkOracle = chainlinkOracles[_asset];
+    
+    // Revert if no Chainlink oracle exists for this asset
+    require(chainlinkOracle != address(0), "No Chainlink oracle available for this asset.");
+
+    // Initialize the Chainlink price feed interface
+    AggregatorV3Interface priceFeed = AggregatorV3Interface(chainlinkOracle);
+
+    // Fetch the latest price from Chainlink
+    (, int256 price,,,) = priceFeed.latestRoundData();
+
+    // Ensure the price is non-negative
+    require(price > 0, "Chainlink price feed returned a negative value.");
+
+    // Chainlink returns prices with 8 decimals, so we scale to 18 decimals
+    return uint256(price) * 10 ** 10;
+}
+
 
 
 }
