@@ -36,7 +36,7 @@ interface ICurvePool{
     function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns(uint256);
 }
 
-contract LybraConfigurator is Ownable {
+contract ZybraConfigurator is Ownable {
     using SafeERC20 for IERC20;
     mapping(address => bool) public mintVault;
     mapping(address => uint256) public mintVaultMaxSupply;
@@ -55,7 +55,6 @@ contract LybraConfigurator is Ownable {
 
     IlzybraMiningIncentives public lzybraMiningIncentives;
     IProtocolRewardsPool public ZybraProtocolRewardsPool;
-    ILZYBRA public lzybra;
     ILZYBRA public lzybra;
     uint256 public flashloanFee;
     // Limiting the maximum percentage of lzybra that can be cross-chain transferred to L2 in relation to the total supply.

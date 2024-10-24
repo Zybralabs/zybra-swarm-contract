@@ -42,7 +42,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     /// @dev Used for Dotc Offer interaction.
     using DotcOfferHelper for DotcOffer;
 
-    ILZYBRA public lybra;
+    ILZYBRA public Lzybra;
     address public usdc_price_feed;
     Iconfigurator public configurator;
     IDotcV2 public dotv2;
@@ -95,7 +95,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         address _configurator,
         address pythAddress
     ) Ownable(_initialOwner) {
-        lybra = ILZYBRA(_lzybra);
+        Lzybra = ILZYBRA(_lzybra);
         dotv2 = IDotcV2(_dotcv2);
         collateralAsset = IERC20(_collateralAsset);
         configurator = Iconfigurator(_configurator);
@@ -147,7 +147,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
        UserAsset[msg.sender][usdc_asset.assetAddress] += assetAmount;
 
-        // Mint lybra tokens based on the asset price and deposit amount
+        // Mint Lzybra tokens based on the asset price and deposit amount
         _mintLZYBRA(
             msg.sender,
             assetAmount,
@@ -262,10 +262,10 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Keeper liquidates borrowers whose collateral ratio is below badCollateralRatio, using lybra provided by Liquidation Provider.
+     * @notice Keeper liquidates borrowers whose collateral ratio is below badCollateralRatio, using Lzybra provided by Liquidation Provider.
      *
      * Requirements:
-     * - provider should authorize Zybra to utilize lybra
+     * - provider should authorize Zybra to utilize Lzybra
      * - onBehalfOf Collateral Ratio should be below badCollateralRatio
      * - assetAmount should be less than 50% of collateral
      * - asset Asset to be Liquidated
@@ -309,12 +309,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         // Check provider authorization
         require(
-            lybra.allowance(provider, address(this)) != 0 ||
+            Lzybra.allowance(provider, address(this)) != 0 ||
                 msg.sender == provider,
-            "Provider should authorize liquidation lybra"
+            "Provider should authorize liquidation Lzybra"
         );
 
-        // Calculate lybra amount to repay
+        // Calculate Lzybra amount to repay
         uint256 LZYBRAAmount = (assetAmount * assetPrice) / 1e18;
 
         // Redeem user's collateral and repay their debt
@@ -376,13 +376,13 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         borrowed[_provider][asset] += _mintAmount;
         _checkHealth(_provider, asset, _assetPrice);
 
-        lybra.mint(_provider, _mintAmount);
+        Lzybra.mint(_provider, _mintAmount);
         poolTotalCirculation += _mintAmount;
         emit Mint(_provider, _mintAmount);
     }
 
     /**
-     * @notice Burn _provideramount lybra to payback minted lybra for _onBehalfOf.
+     * @notice Burn _provideramount Lzybra to payback minted Lzybra for _onBehalfOf.
      *
      * @dev rePAY the User debt so the Collateral Ratio for user is mantained.
      */
@@ -394,8 +394,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     ) internal virtual {
         _updateFee(_onBehalfOf, asset);
 
-        lybra.transferFrom(_provider, address(configurator), _amount);
-        lybra.burn(_provider, _amount);
+        Lzybra.transferFrom(_provider, address(configurator), _amount);
+        Lzybra.burn(_provider, _amount);
         borrowed[_onBehalfOf][asset] -= _amount;
         poolTotalCirculation -= _amount;
 
@@ -454,7 +454,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         // Call external function at the end of state manipulations
         dotv2.takeOfferFixed(offerId, amountToSend, _provider);
 
-        // Calculate and repay lybra
+        // Calculate and repay Lzybra
 
         _repay(
             msg.sender,
@@ -528,7 +528,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         // Require valid amount is received and deduct the fee inline
         require(receivingAmount > fee, "TZA");
 
-        // Calculate and repay lybra
+        // Calculate and repay Lzybra
         _repay(
             _provider,
             _provider,
@@ -587,7 +587,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
 
     /**
-     * @dev Get USD value of current collateral asset and minted lybra through price oracle / Collateral asset USD value must higher than safe Collateral Ratio.
+     * @dev Get USD value of current collateral asset and minted Lzybra through price oracle / Collateral asset USD value must higher than safe Collateral Ratio.
      */
     function _checkHealth(
         address user,

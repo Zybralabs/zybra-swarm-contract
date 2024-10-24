@@ -14,7 +14,7 @@ import {AssetToken} from "../src/AssetToken.sol";
 import {AssetTokenFactory} from "../src/AssetTokenFactory.sol";
 import {MockPyth} from "@pythnetwork/pyth-sdk-solidity/MockPyth.sol";
 import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
-import {LybraConfigurator} from "../src/configuration/LybraConfigurator.sol";
+import {LzybraConfigurator} from "../src/configuration/LzybraConfigurator.sol";
 
 import "../src/DotcManagerV2.sol";
 import "../src/DotcV2.sol";
@@ -47,7 +47,7 @@ contract BaseTest is Deployer, Test {
     MockAdapter adapter3;
     address[] testAdapters;
     ERC20 public USDC;
-    LybraConfigurator public configurator;
+    LzybraConfigurator public configurator;
     LzybraVault public lzybravault;
     MockPyth public mockPyth;
     Lzybra public lzybra;
@@ -137,7 +137,7 @@ contract BaseTest is Deployer, Test {
         uint singleUpdateFeeInWei = 0.01 ether; // Example update fee
 
          mockPyth = new MockPyth(validTimePeriod, singleUpdateFeeInWei);
-         configurator = new LybraConfigurator(address(this), address(USDC));
+         configurator = new LzybraConfigurator(address(this), address(USDC));
 
         lzybravault = new LzybraVault(address(lzybra),address(dotcV2),address(USDC), address(self),address(configurator), address(mockPyth));
         lzybra.grantMintRole(address(lzybravault));
