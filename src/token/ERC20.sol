@@ -10,7 +10,6 @@ import {IERC20Metadata} from "lib/openzeppelin-contracts/contracts/token/ERC20/e
 
 /// @title  ERC20
 /// @notice Standard ERC-20 implementation, with mint/burn functionality and permit logic.
-/// @author Modified from https://github.com/makerdao/xdomain-dss/blob/master/src/Dai.sol
 contract ERC20 is Auth, IERC20Metadata, IERC20Permit {
     /// @inheritdoc IERC20Metadata
     string public name;

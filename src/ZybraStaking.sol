@@ -14,11 +14,12 @@ interface IVaultManager {
 contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
-    IERC20 public zfiToken;  // ZFI token that users will stake
-    IVaultManager public vaultManager;  // Vault Manager contract to interact with vaults
+    IERC20 public zfiToken;
+    IVaultManager public vaultManager;
 
     uint256 public totalStaked;
     uint256 public totalProfitDistributed;
+    uint256 public keeperRewardPercent = 2;  // Percent of liquidation profit to keepers
 
     struct Staker {
         uint256 amountStaked;
@@ -26,12 +27,13 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
     }
 
     mapping(address => Staker) public stakers;
-    uint256 public accProfitPerShare;  // Accumulated profit per share, scaled by 1e12
+    uint256 public accProfitPerShare;
 
     event Staked(address indexed user, uint256 amount);
     event Unstaked(address indexed user, uint256 amount);
-    event LiquidationProfitDistributed(uint256 amount);
-    event LiquidationTriggered(address indexed liquidator, uint256 auctionId, uint256 profit);
+    event ProfitDistributed(uint256 amount);
+    event LiquidationTriggered(address indexed liquidator, uint256 auctionId, uint256 profit, uint256 keeperReward);
+    event RewardWithdrawn(address indexed user, uint256 reward);
 
     constructor(IERC20 _zfiToken, IVaultManager _vaultManager) {
         zfiToken = _zfiToken;
@@ -40,7 +42,6 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
 
     // --- Staking and Unstaking Functions ---
 
-    /// @notice Stake ZFI into the pool
     function stake(uint256 amount) external nonReentrant {
         require(amount > 0, "Cannot stake 0");
 
@@ -54,7 +55,6 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
         emit Staked(msg.sender, amount);
     }
 
-    /// @notice Unstake ZFI from the pool
     function unstake(uint256 amount) external nonReentrant {
         Staker storage staker = stakers[msg.sender];
         require(staker.amountStaked >= amount, "Insufficient staked amount");
@@ -68,62 +68,92 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
         emit Unstaked(msg.sender, amount);
     }
 
-    // --- Liquidation Participation ---
+    // --- Liquidation and Profit Distribution Functions ---
 
-    /// @notice Trigger liquidation of an undercollateralized vault
-    function triggerLiquidation(address vaultOwner, uint256 auctionId) external nonReentrant onlyOwner {
-        // Step 1: Fetch vault collateral and debt details
+    function triggerLiquidation(address vaultOwner, uint256 auctionId) external nonReentrant {
         (uint256 collateralAmount, uint256 debtAmount) = vaultManager.getVaultCollateral(vaultOwner);
-
-        // Step 2: Ensure vault is under-collateralized
         require(collateralAmount < debtAmount, "Vault is not undercollateralized");
 
-        // Step 3: Execute liquidation auction through vault manager
         vaultManager.liquidateVault(vaultOwner, auctionId);
 
-        // Step 4: Calculate liquidation profit (simplified: debtAmount - collateralAmount)
         uint256 liquidationProfit = debtAmount - collateralAmount;
+        uint256 keeperReward = (liquidationProfit * keeperRewardPercent) / 100;
 
-        // Step 5: Distribute liquidation profit to stakers
-        _distributeLiquidationProfit(liquidationProfit);
+        zfiToken.safeTransfer(msg.sender, keeperReward);  // Transfer keeper reward
+        _distributeLiquidationProfit(liquidationProfit - keeperReward);  // Distribute profit to stakers
 
-        emit LiquidationTriggered(msg.sender, auctionId, liquidationProfit);
+        emit LiquidationTriggered(msg.sender, auctionId, liquidationProfit, keeperReward);
     }
 
-    /// @notice Distribute liquidation profit to all stakers
+    function batchTriggerLiquidations(address[] calldata vaultOwners, uint256[] calldata auctionIds) external nonReentrant {
+        require(vaultOwners.length == auctionIds.length, "Mismatched input lengths");
+        
+        for (uint256 i = 0; i < vaultOwners.length; i++) {
+            (uint256 collateralAmount, uint256 debtAmount) = vaultManager.getVaultCollateral(vaultOwners[i]);
+            if (collateralAmount < debtAmount) {
+                vaultManager.liquidateVault(vaultOwners[i], auctionIds[i]);
+
+                uint256 liquidationProfit = debtAmount - collateralAmount;
+                uint256 keeperReward = (liquidationProfit * keeperRewardPercent) / 100;
+
+                zfiToken.safeTransfer(msg.sender, keeperReward);
+                _distributeLiquidationProfit(liquidationProfit - keeperReward);
+
+                emit LiquidationTriggered(msg.sender, auctionIds[i], liquidationProfit, keeperReward);
+            }
+        }
+    }
+
     function _distributeLiquidationProfit(uint256 profitAmount) internal {
         require(totalStaked > 0, "No stakers to distribute profit");
         accProfitPerShare += (profitAmount * 1e12) / totalStaked;
         totalProfitDistributed += profitAmount;
 
-        emit LiquidationProfitDistributed(profitAmount);
+        emit ProfitDistributed(profitAmount);
     }
 
-    // --- Profit Distribution to Stakers ---
+    // --- Profit Withdrawal Functions ---
 
-    /// @notice Calculate and distribute the rewards to a staker
+    function withdrawReward() external nonReentrant {
+        Staker storage staker = stakers[msg.sender];
+        uint256 pendingReward = _calculatePendingReward(staker);
+        
+        require(pendingReward > 0, "No reward to withdraw");
+
+        staker.rewardDebt = staker.amountStaked * accProfitPerShare / 1e12;
+        zfiToken.safeTransfer(msg.sender, pendingReward);
+
+        emit RewardWithdrawn(msg.sender, pendingReward);
+    }
+
     function _distributeReward(Staker storage staker) internal {
-        uint256 pendingReward = (staker.amountStaked * accProfitPerShare / 1e12) - staker.rewardDebt;
+        uint256 pendingReward = _calculatePendingReward(staker);
         if (pendingReward > 0) {
             zfiToken.safeTransfer(msg.sender, pendingReward);
         }
         staker.rewardDebt = staker.amountStaked * accProfitPerShare / 1e12;
     }
 
-    /// @notice View pending reward for a staker
+    function _calculatePendingReward(Staker storage staker) internal view returns (uint256) {
+        return (staker.amountStaked * accProfitPerShare / 1e12) - staker.rewardDebt;
+    }
+
     function pendingReward(address stakerAddress) external view returns (uint256) {
         Staker storage staker = stakers[stakerAddress];
-        return (staker.amountStaked * accProfitPerShare / 1e12) - staker.rewardDebt;
+        return _calculatePendingReward(staker);
     }
 
     // --- Governance Functions ---
 
-    /// @notice Allows the owner to update the vault manager contract
     function updateVaultManager(IVaultManager _vaultManager) external onlyOwner {
         vaultManager = _vaultManager;
     }
 
-    /// @notice Allows the owner to deposit liquidation profit manually if necessary
+    function setKeeperRewardPercent(uint256 _keeperRewardPercent) external onlyOwner {
+        require(_keeperRewardPercent <= 10, "Max 10%");
+        keeperRewardPercent = _keeperRewardPercent;
+    }
+
     function manualProfitDeposit(uint256 profitAmount) external onlyOwner {
         _distributeLiquidationProfit(profitAmount);
     }
