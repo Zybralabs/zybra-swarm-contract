@@ -1,194 +1,205 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {ILZYBRA} from "./interface/ILZYBRA.sol";  // Assuming Lzybra is the token contract you provided
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import "./interface/ILZYBRA.sol";
 
-/**
- * @title OTCWithMintBurn
- * @notice OTC contract for exchanging USDC to ETH with minting and burning Lzybra tokens
- */
-contract OTCWithMintBurn is ReentrancyGuard {
-    IERC20 public usdc;    // USDC token interface
-    ILZYBRA public lzybra;  // Lzybra token interface
+contract AdvancedOTCMintBurn is ReentrancyGuard, Ownable {
+    IERC20 public usdc;
+    ILZYBRA public lzybra;
+    AggregatorV3Interface public ethUsdPriceFeed;
+    AggregatorV3Interface public usdcUsdPriceFeed;
 
-    struct Party {
-        address addr;
-        bool deposited;
-        bool signed;
-        bool rescinded;
+    uint256 public mintFeePercent = 1; // Fee percentage (1%)
+    uint256 public burnFeePercent = 1; // Fee percentage (1%)
+    address public feeCollector; // Address to collect fees
+
+    struct Order {
+        address user;
+        uint256 amount;
+        bool isMint; // true if mint order, false if burn order
+        uint256 priceLimit;
+        uint256 expiry;
+        bool executed;
     }
 
-    struct Periods {
-        uint256 depositTime;
-        uint256 signingTime;
+    Order[] public orders;
+    mapping(address => uint256[]) public userOrders; // Map to track orders by user
+
+    event MintLzybra(address indexed user, uint256 amount, string asset);
+    event BurnLzybra(address indexed user, uint256 amount, string asset);
+    event OrderPlaced(address indexed user, uint256 orderId, uint256 amount, bool isMint);
+    event OrderExecuted(uint256 indexed orderId, address indexed user, uint256 amount, bool isMint);
+    event OrderCancelled(uint256 indexed orderId, address indexed user);
+    event BulkOrdersExecuted(uint256[] orderIds, address indexed executor);
+
+    modifier validAmount(uint256 amount) {
+        require(amount > 0, "Amount must be greater than zero");
+        _;
     }
-
-    Periods public periods;
-    Party public partyA;  // ETH -> Lzybra
-    Party public partyB;  // USDC -> ETH
-
-    event Deposit(address indexed party, uint256 amount);
-    event Withdraw(address indexed party, uint256 amount);
-    event Sign(address indexed party);
-    event Rescind(address indexed party, uint256 amount);
 
     constructor(
-        IERC20 _usdc,       // USDC token address
-        Lzybra _lzybra,     // Lzybra token address
-        address _partyA,
-        address _partyB,
-        uint256 _depositTime,
-        uint256 _signingTime
+        address _usdc,
+        address _lzybra,
+        address _ethUsdPriceFeed,
+        address _usdcUsdPriceFeed,
+        address _feeCollector
     ) {
-        usdc = _usdc;
-        lzybra = _lzybra;
-        _initContract(
-            _partyA,
-            _partyB,
-            block.timestamp + _depositTime,
-            block.timestamp + _depositTime + _signingTime
-        );
+        usdc = IERC20(_usdc);
+        lzybra = ILZYBRA(_lzybra);
+        ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
+        usdcUsdPriceFeed = AggregatorV3Interface(_usdcUsdPriceFeed);
+        feeCollector = _feeCollector;
     }
 
-    modifier depositReview(address party) {
-        require(
-            parties[msg.sender].addr == party &&
-            !parties[msg.sender].deposited &&
-            !parties[msg.sender].signed &&
-            !parties[msg.sender].rescinded,
-            "OTC: Deposit conditions not met"
-        );
-        if (block.timestamp > periods.depositTime) {
-            _returnDeposits();
-        }
-        _;
+    // --- Core OTC Mint/Burn Functions ---
+    function mintWithETH() external payable validAmount(msg.value) nonReentrant {
+        uint256 ethPriceInUsd = _getLatestPrice(ethUsdPriceFeed);
+        uint256 ethAmountInUsd = (msg.value * ethPriceInUsd) / 1e18;
+        uint256 mintAmount = _applyFee(ethAmountInUsd, mintFeePercent);
+
+        lzybra.mint(msg.sender, mintAmount);
+        emit MintLzybra(msg.sender, mintAmount, "ETH");
     }
 
-    modifier signingReview() {
-        require(
-            (msg.sender == partyA.addr || msg.sender == partyB.addr) &&
-            parties[msg.sender].deposited &&
-            !parties[msg.sender].signed &&
-            !parties[msg.sender].rescinded,
-            "OTC: Signing conditions not met"
-        );
-        if (block.timestamp > periods.signingTime) {
-            _returnDeposits();
-        }
-        _;
-    }
-
-    modifier exchangeReview(address party) {
-        require(
-            parties[msg.sender].addr == party &&
-            parties[msg.sender].deposited &&
-            parties[msg.sender].signed &&
-            !parties[msg.sender].rescinded,
-            "OTC: Withdraw conditions not met"
-        );
-        _;
-    }
-
-    /// @notice USDC depositor (partyB) deposits USDC to buy ETH
-    function depositUSDC(uint256 amount) external depositReview(partyB.addr) nonReentrant {
-        require(amount > 0, "OTC: USDC amount should be > 0");
+    function mintWithUSDC(uint256 amount) external validAmount(amount) nonReentrant {
         usdc.transferFrom(msg.sender, address(this), amount);
-        _updatePartyState(msg.sender, true, false, false);
+        uint256 mintAmount = _applyFee(amount, mintFeePercent);
 
-        // Mint Lzybra tokens for the buyer (party B)
-        lzybra.mint(msg.sender, amount);  // Assuming 1 USDC = 1 Lzybra
-
-        emit Deposit(msg.sender, amount);
+        lzybra.mint(msg.sender, mintAmount);
+        emit MintLzybra(msg.sender, mintAmount, "USDC");
     }
 
-    /// @notice ETH depositor (partyA) deposits ETH to sell for USDC
-    function depositETH() external payable depositReview(partyA.addr) nonReentrant {
-        require(msg.value > 0, "OTC: ETH amount should be > 0");
-        _updatePartyState(msg.sender, true, false, false);
-        emit Deposit(msg.sender, msg.value);
+    function burnForETH(uint256 amount) external validAmount(amount) nonReentrant {
+        uint256 ethPriceInUsd = _getLatestPrice(ethUsdPriceFeed);
+        uint256 ethAmount = ((amount * 1e18) / ethPriceInUsd);
+        uint256 burnAmount = _applyFee(amount, burnFeePercent);
+
+        lzybra.burn(msg.sender, burnAmount);
+        payable(msg.sender).transfer(ethAmount);
+        emit BurnLzybra(msg.sender, burnAmount, "ETH");
     }
 
-    /// @notice Party signs the contract
-    function signContract() external signingReview nonReentrant {
-        _updatePartyState(msg.sender, true, true, false);
-        emit Sign(msg.sender);
+    function burnForUSDC(uint256 amount) external validAmount(amount) nonReentrant {
+        uint256 burnAmount = _applyFee(amount, burnFeePercent);
+
+        lzybra.burn(msg.sender, burnAmount);
+        usdc.transfer(msg.sender, burnAmount);
+        emit BurnLzybra(msg.sender, burnAmount, "USDC");
     }
 
-    /// @notice Withdraw USDC after both parties have signed, burns Lzybra tokens
-    function withdrawUSDC() external exchangeReview(partyB.addr) nonReentrant {
-        uint256 amount = usdc.balanceOf(address(this));
-        require(amount > 0, "OTC: No USDC available for withdrawal");
+    // --- Order Management ---
+    function placeOrder(uint256 amount, bool isMint, uint256 priceLimit, uint256 expiry) external validAmount(amount) {
+        require(expiry > block.timestamp, "Order expiry must be in the future");
 
-        // Burn the corresponding amount of Lzybra tokens from party B
-        lzybra.burn(msg.sender, amount);
+        uint256 orderId = orders.length;
+        orders.push(Order({
+            user: msg.sender,
+            amount: amount,
+            isMint: isMint,
+            priceLimit: priceLimit,
+            expiry: expiry,
+            executed: false
+        }));
+        
+        userOrders[msg.sender].push(orderId);
 
-        // Transfer USDC to the buyer (party B)
-        usdc.transfer(msg.sender, amount);
-        _updatePartyState(msg.sender, true, true, true);
-        emit Withdraw(msg.sender, amount);
+        emit OrderPlaced(msg.sender, orderId, amount, isMint);
+    }
 
-        if (partyA.signed && partyA.deposited && !partyA.rescinded) {
-            selfdestruct(payable(partyA.addr));
+    function executeOrder(uint256 orderId) external nonReentrant {
+        require(orderId < orders.length, "Invalid order ID");
+        
+        Order storage order = orders[orderId];
+        require(!order.executed, "Order already executed");
+        require(order.expiry > block.timestamp, "Order has expired");
+
+        uint256 price = _getLatestPrice(order.isMint ? ethUsdPriceFeed : usdcUsdPriceFeed);
+        bool conditionsMet = (order.isMint && price <= order.priceLimit) ||
+                             (!order.isMint && price >= order.priceLimit);
+        require(conditionsMet, "Price conditions not met");
+
+        order.executed = true;
+
+        if (order.isMint) {
+            mintWithUSDC(order.amount);
+        } else {
+            burnForUSDC(order.amount);
         }
+
+        emit OrderExecuted(orderId, order.user, order.amount, order.isMint);
     }
 
-    /// @notice Withdraw ETH after both parties have signed
-    function withdrawETH() external exchangeReview(partyA.addr) nonReentrant {
-        uint256 amount = address(this).balance;
-        require(amount > 0, "OTC: No ETH available for withdrawal");
+    /**
+     * @notice Bulk execution of orders by protocol vault or other authorized parties.
+     * @param orderIds Array of order IDs to be executed.
+     */
+    function bulkOrderExecute(uint256[] calldata orderIds) external nonReentrant {
+        uint256[] memory executedOrders = new uint256[](orderIds.length);
+        uint256 execCount;
 
-        payable(msg.sender).transfer(amount);
-        _updatePartyState(msg.sender, true, true, true);
-        emit Withdraw(msg.sender, amount);
+        for (uint256 i = 0; i < orderIds.length; i++) {
+            uint256 orderId = orderIds[i];
+            if (orderId < orders.length) {
+                Order storage order = orders[orderId];
 
-        if (partyB.signed && partyB.deposited && !partyB.rescinded) {
-            selfdestruct(payable(partyB.addr));
+                if (!order.executed && order.expiry > block.timestamp) {
+                    uint256 price = _getLatestPrice(order.isMint ? ethUsdPriceFeed : usdcUsdPriceFeed);
+                    bool conditionsMet = (order.isMint && price <= order.priceLimit) ||
+                                         (!order.isMint && price >= order.priceLimit);
+
+                    if (conditionsMet) {
+                        order.executed = true;
+                        if (order.isMint) {
+                            mintWithUSDC(order.amount);
+                        } else {
+                            burnForUSDC(order.amount);
+                        }
+                        executedOrders[execCount++] = orderId;
+                        emit OrderExecuted(orderId, order.user, order.amount, order.isMint);
+                    }
+                }
+            }
         }
+
+        emit BulkOrdersExecuted(executedOrders, msg.sender);
     }
 
-    /// @notice Rescind the contract and return deposits
-    function rescindContractA() external rescindReview(partyA.addr) nonReentrant {
-        _returnDeposits();
+    function cancelOrder(uint256 orderId) external {
+        require(orderId < orders.length, "Invalid order ID");
+        require(orders[orderId].user == msg.sender, "Not the order owner");
+        require(!orders[orderId].executed, "Order already executed");
+
+        orders[orderId].executed = true; // Mark as cancelled
+        emit OrderCancelled(orderId, msg.sender);
     }
 
-    /// @notice Rescind the contract and return deposits
-    function rescindContractB() external rescindReview(partyB.addr) nonReentrant {
-        _returnDeposits();
+    // --- Internal Helper Functions ---
+    function _applyFee(uint256 amount, uint256 feePercent) internal returns (uint256) {
+        uint256 feeAmount = (amount * feePercent) / 100;
+        usdc.transfer(feeCollector, feeAmount);
+        return amount - feeAmount;
     }
 
-    function _returnDeposits() internal {
-        // Return USDC to partyB
-        uint256 usdcAmount = usdc.balanceOf(address(this));
-        usdc.transfer(partyB.addr, usdcAmount);
-
-        // Return ETH to partyA
-        uint256 ethAmount = address(this).balance;
-        payable(partyA.addr).transfer(ethAmount);
-
-        selfdestruct(payable(address(0)));
+    function _getLatestPrice(AggregatorV3Interface priceFeed) internal view returns (uint256) {
+        (, int price,,,) = priceFeed.latestRoundData();
+        require(price > 0, "Invalid price");
+        return uint256(price) * 1e10; // Adjusts price to 18 decimals
     }
 
-    function _initContract(
-        address _partyA,
-        address _partyB,
-        uint256 _depositTime,
-        uint256 _signingTime
-    ) internal {
-        partyA = Party(_partyA, false, false, false);
-        partyB = Party(_partyB, false, false, false);
-        periods = Periods(_depositTime, _signingTime);
+    // --- Governance Functions ---
+    function updateMintFee(uint256 _mintFeePercent) external onlyOwner {
+        mintFeePercent = _mintFeePercent;
     }
 
-    function _updatePartyState(
-        address _party,
-        bool _deposited,
-        bool _signed,
-        bool _rescinded
-    ) internal {
-        parties[_party].deposited = _deposited;
-        parties[_party].signed = _signed;
-        parties[_party].rescinded = _rescinded;
+    function updateBurnFee(uint256 _burnFeePercent) external onlyOwner {
+        burnFeePercent = _burnFeePercent;
+    }
+
+    function updateFeeCollector(address _feeCollector) external onlyOwner {
+        feeCollector = _feeCollector;
     }
 }

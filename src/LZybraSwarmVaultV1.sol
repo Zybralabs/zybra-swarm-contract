@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.19;
 
+
 import "./interfaces/Iconfigurator.sol";
 import "./interfaces/ILZYBRA.sol";
 import "./interfaces/IDotcV2.sol";
@@ -10,13 +11,16 @@ import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "lib/openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
+import "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import "lib/openzeppelin-contracts/contracts/access/OwnableUpgradeable.sol";
 import {AssetHelper} from "./helpers/AssetHelper.sol";
 import {Asset, AssetType, AssetPrice, OfferStruct, OfferPrice, DotcOffer} from "./structures/DotcStructuresV2.sol";
-import {SafeTransferLib, FixedPointMathLib, FixedPointMathLib} from "./exports/ExternalExports.sol";
+import {SafeTransferLib, FixedPointMathLib} from "./exports/ExternalExports.sol";
 import {OfferHelper} from "./helpers/OfferHelper.sol";
 import {DotcOfferHelper} from "./helpers/DotcOfferHelper.sol";
+
 
 import "./interfaces/IERC7540.sol";
 
@@ -87,20 +91,40 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         _;
     }
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+
+    function initialize(
         address _collateralAsset,
         address _lzybra,
         address _dotcv2,
-        address _initialOwner,
         address _configurator,
-        address pythAddress
-    ) Ownable(_initialOwner) {
+        address _usdc_price_feed,
+        address _pythAddress
+    ) external initializer {
+        __Ownable_init();
+        __UUPSUpgradeable_init();
+        
+        // Initialize state variables
+        collateralAsset = IERC20(_collateralAsset);
         Lzybra = ILZYBRA(_lzybra);
         dotv2 = IDotcV2(_dotcv2);
-        collateralAsset = IERC20(_collateralAsset);
         configurator = Iconfigurator(_configurator);
-        pyth = IPyth(pythAddress);
+        usdc_price_feed = _usdc_price_feed;
+        pyth = IPyth(_pythAddress);
+
+        // Initialize mappings as needed
+        poolTotalCirculation = 0; // Defaults to 0, but explicitly set for clarity
+
+        // Initialize fees and other mappings
+        // Set default timestamps and fee storage
+        // feeUpdatedAt and feeStored mappings will start with zero values
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /**
      * @notice Deposit USDC, update the interest distribution, can mint LZybra directly
