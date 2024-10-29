@@ -3,6 +3,7 @@
     "@chainlink/contracts": "^1.2.0",
     "@chainlink/contracts-ccip": "^1.5.0",
     "@pythnetwork/pyth-sdk-solidity": "^4.0.0",
+    "@uniswap/v3-periphery": "^1.4.4",
     "solady": "^0.0.247"
   }
 }

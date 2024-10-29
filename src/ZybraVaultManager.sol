@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./interface/ILzybraVault.sol"; // Import your LzybraVault
+import "./interfaces/ILzybraVault.sol"; // Import your LzybraVault
 
 contract VaultManager is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -49,6 +49,11 @@ contract VaultManager is Ownable, ReentrancyGuard {
         address indexed buyer,
         uint256 finalPrice
     );
+
+    modifier onlyAuthorized() {
+    require(msg.sender == owner() || msg.sender == address(zfiStakingLiquidation), "Not authorized");
+    _;
+}
 
     /**
      * @dev Constructor to initialize the VaultManager contract.
@@ -96,45 +101,42 @@ contract VaultManager is Ownable, ReentrancyGuard {
      * @param vaultOwner Address of the vault owner to be liquidated.
      * @dev Callable only by authorized parties.
      */
-    function liquidateVault(address vaultOwner) external nonReentrant {
-        (uint256 collateralAmount, uint256 debtAmount) = getVaultCollateral(vaultOwner);
-        require(collateralAmount < debtAmount, "Vault not undercollateralized");
+   function liquidateVault(address vaultOwner) external nonReentrant onlyAuthorized {
+    (uint256 collateralAmount, uint256 debtAmount) = getVaultCollateral(vaultOwner);
+    require(collateralAmount < debtAmount, "Vault not undercollateralized");
 
-        uint256 collateralToSeize = (collateralAmount * (100 + liquidationPenalty)) / 100;
+    uint256 collateralToSeize = (collateralAmount * (100 + liquidationPenalty)) / 100;
 
-        // Perform the liquidation via the LzybraVault contract
-        vault.liquidation(
-            msg.sender,
-            vaultOwner,
-            collateralToSeize,
-            Asset({
-                assetType: AssetType.ERC20,
-                assetAddress: address(vault.collateralAsset()),
-                amount: collateralToSeize,
-                tokenId: 0,
-                assetPrice: AssetPrice(vault.usdc_price_feed(), 0, 0)
-            }),
-            new bytes(0)
-        );
+    vault.liquidation(
+        msg.sender,
+        vaultOwner,
+        collateralToSeize,
+        Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: address(vault.collateralAsset()),
+            amount: collateralToSeize,
+            tokenId: 0,
+            assetPrice: AssetPrice(vault.usdc_price_feed(), 0, 0)
+        }),
+        new bytes(0)
+    );
 
-        // Calculate starting auction price
-        uint256 startPrice = (debtAmount * (100 + auctionStartPremium)) / 100;
+    uint256 startPrice = (debtAmount * (100 + auctionStartPremium)) / 100;
 
-        // Register the auction
-        auctions[auctionCounter] = Auction({
-            vaultOwner: vaultOwner,
-            debtAmount: debtAmount,
-            collateralAmount: collateralToSeize,
-            startPrice: startPrice,
-            startTime: block.timestamp,
-            isActive: true
-        });
+    auctions[auctionCounter] = Auction({
+        vaultOwner: vaultOwner,
+        debtAmount: debtAmount,
+        collateralAmount: collateralToSeize,
+        startPrice: startPrice,
+        startTime: block.timestamp,
+        isActive: true
+    });
 
-        emit VaultLiquidated(vaultOwner, auctionCounter, debtAmount, collateralToSeize);
-        emit AuctionStarted(auctionCounter, vaultOwner, block.timestamp, startPrice);
+    emit VaultLiquidated(vaultOwner, auctionCounter, debtAmount, collateralToSeize);
+    emit AuctionStarted(auctionCounter, vaultOwner, block.timestamp, startPrice);
 
-        auctionCounter++;
-    }
+    auctionCounter++;
+}
 
     /**
      * @notice Calculates the current auction price for a given auction based on elapsed time.
