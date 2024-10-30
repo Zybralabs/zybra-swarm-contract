@@ -8,6 +8,7 @@ import "./BaseTest.sol";
 contract LzybraVaultWithdrawTest is BaseTest {
     uint256 constant AMOUNT = 100e18;
     uint256 constant WITHDRAW_AMOUNT = 50e18;
+    uint256 constant SMALL_AMOUNT = 1e18;
 
     Asset depositAsset;
     Asset withdrawalAsset1;
@@ -102,44 +103,56 @@ contract LzybraVaultWithdrawTest is BaseTest {
 
     // Test for a successful full withdrawal
     function testSuccessfulFullWithdraw() public {
-        // Deposit funds first
         vm.startPrank(user);
         USDC.approve(address(lzybravault), AMOUNT);
         lzybravault.deposit(AMOUNT, 1, AMOUNT);
-
-        // Now withdraw the full amount
         lzybravault.withdraw(1, AMOUNT);
         
-        // Check user’s balance after withdrawal
-        assertEq(USDC.balanceOf(user), AMOUNT, "Incorrect user balance after withdrawal");
-
+        assertEq(USDC.balanceOf(user), AMOUNT, "User balance should match deposited amount after full withdrawal");
+        assertEq(lzybravault.balanceOf(user), 0, "Vault balance for user should be zero after full withdrawal");
+        
         vm.stopPrank();
     }
 
-    // Test for partial withdrawal
+    // Test for a partial withdrawal
     function testPartialWithdraw() public {
-        // Deposit funds first
         vm.startPrank(user);
         USDC.approve(address(lzybravault), AMOUNT);
         lzybravault.deposit(AMOUNT, 1, AMOUNT);
-
-        // Withdraw half of the amount
+        
         lzybravault.withdraw(1, WITHDRAW_AMOUNT);
-
-        // Check balances after partial withdrawal
-        assertEq(USDC.balanceOf(user), WITHDRAW_AMOUNT, "Incorrect user balance after partial withdrawal");
-        assertGt(AMOUNT, USDC.balanceOf(user), "Expected partial balance after withdrawal");
-
+        
+        uint256 remainingBalance = AMOUNT - WITHDRAW_AMOUNT;
+        assertEq(USDC.balanceOf(user), WITHDRAW_AMOUNT, "User balance should reflect partial withdrawal");
+        assertEq(lzybravault.balanceOf(user), remainingBalance, "Vault balance should reflect remaining after partial withdrawal");
+        
         vm.stopPrank();
     }
 
-    // Test for withdrawing more than the deposited amount
+    // Test for multiple withdrawals in sequence
+    function testMultipleSequentialWithdrawals() public {
+        vm.startPrank(user);
+        USDC.approve(address(lzybravault), AMOUNT);
+        lzybravault.deposit(AMOUNT, 1, AMOUNT);
+        
+        lzybravault.withdraw(1, SMALL_AMOUNT);
+        assertEq(USDC.balanceOf(user), SMALL_AMOUNT, "Balance after first withdrawal should match small amount");
+        
+        lzybravault.withdraw(1, WITHDRAW_AMOUNT);
+        assertEq(USDC.balanceOf(user), SMALL_AMOUNT + WITHDRAW_AMOUNT, "Balance after second withdrawal should be cumulative");
+
+        uint256 remainingBalance = AMOUNT - SMALL_AMOUNT - WITHDRAW_AMOUNT;
+        assertEq(lzybravault.balanceOf(user), remainingBalance, "Vault balance should match remaining after multiple withdrawals");
+        
+        vm.stopPrank();
+    }
+
+    // Test for attempting to withdraw more than the deposited amount
     function testWithdrawMoreThanDeposited() public {
         vm.startPrank(user);
         USDC.approve(address(lzybravault), AMOUNT);
         lzybravault.deposit(AMOUNT, 1, AMOUNT);
-
-        // Attempt to withdraw more than deposited
+        
         vm.expectRevert("Withdraw amount exceeds balance");
         lzybravault.withdraw(1, AMOUNT + 1);
 
@@ -161,7 +174,7 @@ contract LzybraVaultWithdrawTest is BaseTest {
         vm.stopPrank();
     }
 
-    // Test Reentrancy attack prevention on withdrawal
+    // Test reentrancy attack prevention on withdrawal
     function testReentrancyAttack() public {
         vm.startPrank(user);
         USDC.approve(address(lzybravault), AMOUNT);
@@ -175,29 +188,24 @@ contract LzybraVaultWithdrawTest is BaseTest {
         vm.stopPrank();
     }
 
-    // Test price feed manipulation on withdrawal
-    function testPriceFeedManipulation() public {
-        // Deposit funds
+    // Test withdrawal during price feed manipulation
+    function testWithdrawalDuringPriceFeedManipulation() public {
         vm.startPrank(user);
         USDC.approve(address(lzybravault), AMOUNT);
         lzybravault.deposit(AMOUNT, 1, AMOUNT);
         vm.stopPrank();
 
-        // Attacker manipulates the price feed
-        mockPyth.updatePrice(id1, 1e7, 1e7); // Lower the price artificially
+        // Manipulate the price feed
+        mockPyth.updatePrice(id1, 1e7, 1e7); // Lower price artificially
 
-        // Attempt to withdraw at the manipulated price
         vm.startPrank(user);
         lzybravault.withdraw(1, AMOUNT);
-
-        // Check if user received less due to price manipulation
-        assertEq(USDC.balanceOf(user), AMOUNT, "Withdraw amount should not be impacted by price manipulation");
+        
+        assertEq(USDC.balanceOf(user), AMOUNT, "User balance after manipulated price withdrawal should be consistent");
 
         vm.stopPrank();
     }
 
-
-    
     // Helper contract to simulate a reentrancy attack
     contract ReentrancyAttacker {
         LzybraVault public vault;

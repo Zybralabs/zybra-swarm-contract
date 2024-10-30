@@ -466,4 +466,153 @@ contract depositTest is BaseTest {
 
         vm.stopPrank();
     }
+
+    function testDepositWithExpiredOffer() public {
+    // Simulate expiration of the offer by advancing the block timestamp
+    vm.warp(block.timestamp + 3 days);
+
+    // Attempt to deposit after offer expiration
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), AMOUNT);
+
+    vm.expectRevert("Offer has expired");
+    lzybravault.deposit(AMOUNT, 1, AMOUNT);
+
+    vm.stopPrank();
+}
+
+function testReentrancyAttackOnDeposit() public {
+    ReentrancyAttacker attacker = new ReentrancyAttacker(address(lzybravault));
+
+    vm.startPrank(user);
+    USDC.approve(address(attacker), AMOUNT);
+
+    vm.expectRevert("ReentrancyGuard: reentrant call");
+    attacker.attackDeposit(AMOUNT, 1, AMOUNT);
+
+    vm.stopPrank();
+}
+
+// Helper contract to simulate a reentrancy attack on deposit
+contract ReentrancyAttacker {
+    LzybraVault public vault;
+
+    constructor(address _vault) {
+        vault = LzybraVault(_vault);
+    }
+
+    fallback() external payable {
+        vault.deposit(1 ether, 1, 1 ether); // Attempt reentrant call within deposit
+    }
+
+    function attackDeposit(uint256 amount, uint256 offerId, uint256 mintAmount) public {
+        vault.deposit(amount, offerId, mintAmount);
+    }
+}
+
+
+function testDepositExceedingMaximumOfferLimit() public {
+    // Assuming the maximum deposit limit for an offer is 100e18
+    uint256 maxLimit = 100e18;
+    lzybravault.setOfferLimit(1, maxLimit); // Assuming `setOfferLimit` is available to set limits
+
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), maxLimit + 1);
+
+    // Attempt to deposit more than the maximum limit
+    vm.expectRevert("Deposit amount exceeds maximum limit");
+    lzybravault.deposit(maxLimit + 1, 1, maxLimit + 1);
+
+    vm.stopPrank();
+}
+
+
+function testDepositAcrossMultipleOffersSimultaneously() public {
+    uint256 amount = 10e18;
+
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), amount * 3);
+
+    // Deposit into offer 1
+    lzybravault.deposit(amount, 1, amount);
+    assertEq(lzybra.balanceOf(user), amount, "Incorrect balance after deposit in offer 1");
+
+    // Deposit into offer 2
+    lzybravault.deposit(amount, 2, amount);
+    assertEq(lzybra.balanceOf(user), amount * 2, "Incorrect balance after deposit in offer 2");
+
+    // Deposit into offer 3
+    lzybravault.deposit(amount, 3, amount);
+    assertEq(lzybra.balanceOf(user), amount * 3, "Incorrect balance after deposit in offer 3");
+
+    vm.stopPrank();
+}
+
+function testDepositWithMidTransactionPriceFeedUpdate() public {
+    uint256 amount = 5e18;
+
+    // Prepare and set the initial price
+    mockPyth.updatePrice(id1, price1, expo1);
+    lzybravault.addPriceFeed(address(USDC), id1);
+
+    // Start deposit transaction
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), amount);
+
+    // Update price feed in the middle of the deposit transaction
+    mockPyth.updatePrice(id1, price1 + 5e7, expo1 + 1e7);
+
+    lzybravault.deposit(amount, 1, amount);
+
+    assertEq(
+        lzybra.balanceOf(user),
+        amount,
+        "User balance after mid-transaction price feed update should be calculated based on updated price"
+    );
+
+    vm.stopPrank();
+}
+function testMultipleDepositsWithDynamicOfferAdjustments() public {
+    uint256 initialAmount = 10e18;
+    uint256 adjustedAmount = 15e18;
+
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), initialAmount);
+
+    // Initial deposit with current offer details
+    lzybravault.deposit(initialAmount, 1, initialAmount);
+    assertEq(lzybra.balanceOf(user), initialAmount, "User balance mismatch after initial deposit");
+
+    // Adjust the offer details
+    OfferStruct memory adjustedOffer = createOffer(TakingOfferType.BlockOffer, 12e18);
+    dotcV2.updateOffer(1, adjustedOffer);
+
+    // Approve new deposit amount
+    USDC.approve(address(lzybravault), adjustedAmount);
+
+    // Deposit again after offer adjustments
+    lzybravault.deposit(adjustedAmount, 1, adjustedAmount);
+    assertEq(
+        lzybra.balanceOf(user),
+        initialAmount + adjustedAmount,
+        "User balance mismatch after deposit with adjusted offer"
+    );
+
+    vm.stopPrank();
+}
+
+function testUnauthorizedAccessToDeposit() public {
+    address unauthorizedUser = address(0xABCD);
+
+    // Ensure unauthorized user is not in special addresses or authorizationAddresses
+    vm.startPrank(unauthorizedUser);
+    USDC.approve(address(lzybravault), AMOUNT);
+
+    vm.expectRevert("User not authorized for this offer");
+    lzybravault.deposit(AMOUNT, 1, AMOUNT);
+
+    vm.stopPrank();
+}
+
+
 }

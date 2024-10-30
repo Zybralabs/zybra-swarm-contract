@@ -228,5 +228,104 @@ contract LiquidationTest is BaseTest {
 
         vm.stopPrank();
     }
-    
+
+
+function testCollateralRestorationAfterFullRepayment() public {
+    // Step 1: User deposits collateral and borrows
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), COLLATERAL_AMOUNT);
+    lzybravault.deposit(COLLATERAL_AMOUNT, 1, BORROW_AMOUNT);
+
+    // Step 2: Fully repay the debt
+    lzybravault.repayDebt(user, address(USDC), BORROW_AMOUNT);
+
+    // Step 3: Verify collateral balance after full repayment
+    uint256 collateralBalance = lzybravault.getCollateralBalance(user);
+    assertEq(collateralBalance, COLLATERAL_AMOUNT, "Collateral should be fully restored after full debt repayment");
+
+    vm.stopPrank();
+}
+
+function testLiquidationWithInsufficientDebt() public {
+    // Step 1: User deposits collateral and borrows
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), COLLATERAL_AMOUNT);
+    lzybravault.deposit(COLLATERAL_AMOUNT, 1, BORROW_AMOUNT);
+
+    // Partially repay the debt to an amount below the liquidation threshold
+    uint256 repaymentAmount = BORROW_AMOUNT - (BORROW_AMOUNT / 4);
+    lzybravault.repayDebt(user, address(USDC), repaymentAmount);
+
+    // Step 2: Attempt liquidation, which should fail
+    vm.startPrank(investor);
+    vm.expectRevert("Debt amount insufficient for liquidation");
+    lzybravault.liquidation(
+        investor,
+        user,
+        BORROW_AMOUNT / 2,
+        Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: address(asset1),
+            amount: BORROW_AMOUNT / 2,
+            tokenId: 0,
+            assetPrice: AssetPrice(address(mockPyth), 0, 0)
+        }),
+        new bytes
+    );
+
+    vm.stopPrank();
+}
+function testLiquidationAfterPartialRepayment() public {
+    // Step 1: User deposits collateral and borrows
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), COLLATERAL_AMOUNT);
+    lzybravault.deposit(COLLATERAL_AMOUNT, 1, BORROW_AMOUNT);
+
+    // Step 2: Partial debt repayment
+    uint256 partialRepayment = BORROW_AMOUNT / 2;
+    lzybravault.repayDebt(user, address(USDC), partialRepayment);
+
+    // Step 3: Price drop to trigger liquidation condition
+    mockPyth.updatePrice(collateralAssetId, int64(REDUCED_PRICE), int32(0));
+
+    // Step 4: Liquidator attempts partial liquidation
+    vm.startPrank(investor);
+    lzybravault.liquidation(
+        investor,
+        user,
+        BORROW_AMOUNT / 4,
+        Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: address(asset1),
+            amount: COLLATERAL_AMOUNT / 2,
+            tokenId: 0,
+            assetPrice: AssetPrice(address(mockPyth), 0, 0)
+        }),
+        new bytes
+    );
+
+    // Verify that debt has been reduced after liquidation
+    uint256 remainingDebt = lzybravault.getBorrowed(user, address(asset1));
+    assertEq(remainingDebt, partialRepayment - (BORROW_AMOUNT / 4), "Debt should be reduced by liquidation amount");
+
+    vm.stopPrank();
+}
+function testExactDebtRepayment() public {
+    // Step 1: User deposits collateral and borrows
+    vm.startPrank(user);
+    USDC.approve(address(lzybravault), COLLATERAL_AMOUNT);
+    lzybravault.deposit(COLLATERAL_AMOUNT, 1, BORROW_AMOUNT);
+
+    // Step 2: Repay exactly the borrowed amount
+    USDC.approve(address(lzybravault), BORROW_AMOUNT);
+    lzybravault.repayDebt(user, address(USDC), BORROW_AMOUNT);
+
+    // Verify that the debt is exactly cleared
+    uint256 remainingDebt = lzybravault.getBorrowed(user, address(asset1));
+    assertEq(remainingDebt, 0, "Debt should be exactly zero after full repayment");
+
+    vm.stopPrank();
+}
+
+
 }
