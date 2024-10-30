@@ -14,7 +14,7 @@ import {AssetToken} from "../src/AssetToken.sol";
 import {AssetTokenFactory} from "../src/AssetTokenFactory.sol";
 import {MockPyth} from "@pythnetwork/pyth-sdk-solidity/MockPyth.sol";
 import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
-import {LzybraConfigurator} from "../src/configuration/LzybraConfigurator.sol";
+import {ZybraConfigurator} from "../src/configuration/ZybraConfigurator.sol";
 
 import "../src/DotcManagerV2.sol";
 import "../src/DotcV2.sol";
@@ -47,7 +47,7 @@ contract BaseTest is Deployer, Test {
     MockAdapter adapter3;
     address[] testAdapters;
     ERC20 public USDC;
-    LzybraConfigurator public configurator;
+    ZybraConfigurator public configurator;
     LzybraVault public lzybravault;
     MockPyth public mockPyth;
     Lzybra public lzybra;

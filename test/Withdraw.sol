@@ -6,8 +6,8 @@ import {Asset, AssetType, AssetPrice, OfferFillType, PercentageType, OfferPrice,
 import "./BaseTest.sol";
 
 contract LzybraVaultWithdrawTest is BaseTest {
-    uint256 AMOUNT = 100e18;
-    uint256 WITHDRAW_AMOUNT = 50e18;
+    uint256 constant AMOUNT = 100e18;
+    uint256 constant WITHDRAW_AMOUNT = 50e18;
 
     Asset depositAsset;
     Asset withdrawalAsset1;
@@ -26,7 +26,7 @@ contract LzybraVaultWithdrawTest is BaseTest {
     function setUp() public override {
         super.setUp();
 
-        // Mint initial balances
+        // Mint initial balances for testing
         USDC.mint(self, AMOUNT);
         USDC.mint(investor, AMOUNT);
         USDC.mint(user, AMOUNT);
@@ -36,37 +36,26 @@ contract LzybraVaultWithdrawTest is BaseTest {
         USDC.approve(address(lzybravault), AMOUNT);
         vm.stopPrank();
 
-        // Initialize price feed data
+        // Initialize price feed data for mocked assets
         id1 = keccak256(abi.encodePacked("NVIDIA"));
         id2 = keccak256(abi.encodePacked("MCSF"));
         id3 = keccak256(abi.encodePacked("TESLA"));
 
-        // Setup price feeds
+        // Setup price feeds with mocked data
         initializePriceFeeds();
 
-        // Create deposit and withdrawal assets
-        depositAsset = Asset({
-            assetType: AssetType.ERC20,
-            assetAddress: address(USDC),
-            amount: AMOUNT,
-            tokenId: 0,
-            assetPrice: AssetPrice(address(ChainLinkMockUSDC), 0, 0)
-        });
+        // Set up deposit and withdrawal assets with mocked price feeds
+        depositAsset = createAsset(address(USDC), address(ChainLinkMockUSDC), AMOUNT);
+        withdrawalAsset1 = createAsset(address(asset1), address(ChainLinkMockNVIDIA), AMOUNT);
+        withdrawalAsset2 = createAsset(address(asset2), address(ChainLinkMockMSCRF), AMOUNT);
+        withdrawalAsset3 = createAsset(address(asset3), address(ChainLinkMockUSDC), AMOUNT);
 
-        withdrawalAsset1 = Asset({
-            assetType: AssetType.ERC20,
-            assetAddress: address(asset1),
-            amount: AMOUNT,
-            tokenId: 0,
-            assetPrice: AssetPrice(address(ChainLinkMockNVIDIA), 0, 0)
-        });
-
-        // Initialize offers
+        // Initialize offers with test-specific parameters
         offer1 = createOffer(10e18);
         offer2 = createOffer(5e18);
         offer3 = createOffer(8e18);
 
-        // Make offers for testing
+        // Make offers for testing scenarios
         vm.startPrank(investor);
         dotcV2.makeOffer(depositAsset, withdrawalAsset1, offer1);
         dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer2);
@@ -81,8 +70,19 @@ contract LzybraVaultWithdrawTest is BaseTest {
         mockPyth.createPriceFeedUpdateData(id3, 20e7, 3e7, 0, 20e7, 3e7, uint64(block.timestamp), uint64(block.timestamp - 1));
     }
 
+    // Helper function to create assets
+    function createAsset(address assetAddress, address priceFeed, uint256 amount) internal pure returns (Asset memory) {
+        return Asset({
+            assetType: AssetType.ERC20,
+            assetAddress: assetAddress,
+            amount: amount,
+            tokenId: 0,
+            assetPrice: AssetPrice(priceFeed, 0, 0)
+        });
+    }
+
     // Helper function to create offers
-    function createOffer(uint256 unitPrice) internal returns (OfferStruct memory) {
+    function createOffer(uint256 unitPrice) internal view returns (OfferStruct memory) {
         return OfferStruct({
             takingOfferType: TakingOfferType.BlockOffer,
             offerPrice: OfferPrice({
