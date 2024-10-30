@@ -172,4 +172,61 @@ contract LiquidationTest is BaseTest {
 
         vm.stopPrank();
     }
+      function testPartialDebtRepayment() public {
+        // Step 1: User deposits collateral and borrows
+        vm.startPrank(user);
+        USDC.approve(address(lzybravault), COLLATERAL_AMOUNT);
+        lzybravault.deposit(COLLATERAL_AMOUNT, 1, BORROW_AMOUNT);
+
+        // Verify initial debt amount
+        uint256 initialDebt = lzybravault.getBorrowed(user, address(borrowedAsset.assetAddress));
+        assertEq(initialDebt, BORROW_AMOUNT, "Initial debt should match the borrowed amount");
+
+        // Step 2: User repays partial debt
+        uint256 repaymentAmount = BORROW_AMOUNT / 2;
+        USDC.approve(address(lzybravault), repaymentAmount);
+        lzybravault.repayDebt(user, borrowedAsset.assetAddress, repaymentAmount);
+
+        // Verify that the debt has been partially repaid
+        uint256 remainingDebt = lzybravault.getBorrowed(user, borrowedAsset.assetAddress);
+        assertEq(remainingDebt, BORROW_AMOUNT - repaymentAmount, "Debt should be partially repaid");
+
+        vm.stopPrank();
+    }
+
+    // Test over-repayment scenario where the user tries to repay more than the debt amount
+    function testOverRepayment() public {
+        // Step 1: User deposits collateral and borrows
+        vm.startPrank(user);
+        USDC.approve(address(lzybravault), COLLATERAL_AMOUNT);
+        lzybravault.deposit(COLLATERAL_AMOUNT, 1, BORROW_AMOUNT);
+
+        // Attempt to repay more than the actual debt amount
+        uint256 repaymentAmount = BORROW_AMOUNT * 2;
+        USDC.approve(address(lzybravault), repaymentAmount);
+        vm.expectRevert("Repayment exceeds debt amount");
+        lzybravault.repayDebt(user, borrowedAsset.assetAddress, repaymentAmount);
+
+        vm.stopPrank();
+    }
+
+    // Test unauthorized repayment scenario
+    function testUnauthorizedRepayment() public {
+        vm.startPrank(user);
+        USDC.approve(address(lzybravault), COLLATERAL_AMOUNT);
+        lzybravault.deposit(COLLATERAL_AMOUNT, 1, BORROW_AMOUNT);
+        vm.stopPrank();
+
+        // Attempt to repay debt from an unauthorized address
+        address unauthorizedUser = makeAddr("unauthorized");
+        vm.startPrank(unauthorizedUser);
+
+        uint256 repaymentAmount = BORROW_AMOUNT;
+        USDC.approve(address(lzybravault), repaymentAmount);
+        vm.expectRevert("Unauthorized repayment");
+        lzybravault.repayDebt(user, borrowedAsset.assetAddress, repaymentAmount);
+
+        vm.stopPrank();
+    }
+    
 }
