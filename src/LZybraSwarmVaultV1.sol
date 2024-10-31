@@ -298,19 +298,10 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         bytes[] calldata priceUpdate
     ) external payable nonReentrant {
         // Fetch asset price and collateral ratio
-        uint256 assetPrice = getAssetPriceOracle(
-            asset.assetAddress,
-            priceUpdate
-        );
-        address assetAddress = asset.assetAddress;
-
-        // Calculate collateral value and borrowed value
-        uint256 collateralValue = UserAsset[onBehalfOf][assetAddress] *
-            assetPrice;
-        uint256 borrowedValue = getBorrowed(onBehalfOf, assetAddress);
-        require(borrowedValue > 0, "Borrowed value must be greater than zero");
-        uint256 onBehalfOfCollateralRatio = (collateralValue * 100) /
-            borrowedValue;
+           (bool shouldLiquidate, uint256 onBehalfOfCollateralRatio) = 
+        getCollateralRatioAndLiquidationInfo(onBehalfOf, asset.assetAddress,priceUpdate);
+    
+        require(shouldLiquidate, "Collateral ratio is above liquidation threshold");
 
         // Check liquidation limits
         require(
@@ -374,21 +365,14 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
 
-    function repayingDebt(address provider, address asset, uint256 lzybra_amount) external payable virtual {
+        
+    function repayingDebt(address provider, address asset, uint256 lzybra_amount, bytes[] calldata priceUpdate) external payable virtual {
         require(borrowed[asset][provider] >= lzybra_amount, "lzybra_amount cannot surpass providers debt");
-         uint256 assetPrice = getAssetPriceOracle(
-            asset,
-            priceUpdate
-        );
-        // Calculate collateral value and borrowed value
-        uint256 collateralValue = UserAsset[onBehalfOf][assetAddress] *
-            assetPrice;
-        uint256 borrowedValue = getBorrowed(onBehalfOf, assetAddress);
-        require(borrowedValue > 0, "Borrowed value must be greater than zero");
-        uint256 CollateralRatio = (collateralValue * 100) /
-            borrowedValue;
-        require(CollateralRatio >= 100 * 1e18, "The provider's collateral ratio should be not less than 100%.");
+        (, uint256 providerCollateralRatio) = 
+        getCollateralRatioAndLiquidationInfo(provider, asset, priceUpdate);
 
+    // Ensure the collateral ratio is healthy (at least 100%) for debt repayment
+        require(providerCollateralRatio >= configurator.getSafeCollateralRatio(address(this)));
         _repay(provider, asset, provider,lzybra_amount);
         emit RigidRedemption(msg.sender, provider,asset, lzybra_amount, collateralAmount);
     }
@@ -722,15 +706,16 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
     function getCollateralRatioAndLiquidationInfo(
     address user, 
-    address asset
+    address asset,
+    bytes[] calldata priceUpdate
 ) public view returns (bool shouldLiquidate, uint256 collateralRatio) {
 
-    // Get the user's tranche asset amount and the current price of the asset
+    // Get the user's asset amount and the current price of the asset
     uint256 userCollateralAmount = UserAsset[user][asset];
-    uint256 trancheAssetPrice = getAssetPriceOracle(asset);
+    uint256 AssetPrice = getAssetPriceOracle(asset,priceUpdate);
 
     // Calculate the USD value of the collateral
-    uint256 collateralValueInUSD = (userCollateralAmount * trancheAssetPrice) / 1e18;
+    uint256 collateralValueInUSD = (userCollateralAmount * AssetPrice) / 1e18;
 
     // Get the user's total borrowed amount in LZYBRA (assumed to be in USD)
     uint256 userDebtAmount = getBorrowed( user,asset);
