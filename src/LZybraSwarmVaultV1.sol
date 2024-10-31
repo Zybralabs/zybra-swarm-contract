@@ -374,7 +374,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
 
-    function repayingDebt(address provider, address asset, uint256 lzybra_amount) external virtual {
+    function repayingDebt(address provider, address asset, uint256 lzybra_amount) external payable virtual {
         require(borrowed[asset][provider] >= lzybra_amount, "lzybra_amount cannot surpass providers debt");
          uint256 assetPrice = getAssetPriceOracle(
             asset,
@@ -387,8 +387,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         require(borrowedValue > 0, "Borrowed value must be greater than zero");
         uint256 CollateralRatio = (collateralValue * 100) /
             borrowedValue;
-
         require(CollateralRatio >= 100 * 1e18, "The provider's collateral ratio should be not less than 100%.");
+
         _repay(provider, asset, provider,lzybra_amount);
         emit RigidRedemption(msg.sender, provider,asset, lzybra_amount, collateralAmount);
     }
@@ -719,6 +719,34 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         require(userAssetAmount > 0, "UserAsset must be greater than zero");
         return (borrowedAmount * (amount / userAssetAmount));
     }
+
+    function getCollateralRatioAndLiquidationInfo(
+    address user, 
+    address asset
+) public view returns (bool shouldLiquidate, uint256 collateralRatio) {
+
+    // Get the user's tranche asset amount and the current price of the asset
+    uint256 userCollateralAmount = UserAsset[user][asset];
+    uint256 trancheAssetPrice = getAssetPriceOracle(asset);
+
+    // Calculate the USD value of the collateral
+    uint256 collateralValueInUSD = (userCollateralAmount * trancheAssetPrice) / 1e18;
+
+    // Get the user's total borrowed amount in LZYBRA (assumed to be in USD)
+    uint256 userDebtAmount = getBorrowed( user,asset);
+
+    // Avoid division by zero: if the user has no debt, return max collateral ratio and no liquidation
+    if (userDebtAmount == 0) {
+        return (false, type(uint256).max); // No liquidation if no debt, max ratio
+    }
+
+    // Calculate the collateral ratio
+    collateralRatio = (collateralValueInUSD * 1e18) / userDebtAmount;
+
+    // Determine if the collateral ratio falls below the liquidation threshold
+    uint256 badCollateralRatio = configurator.getBadCollateralRatio(address(this));
+    shouldLiquidate = collateralRatio < badCollateralRatio;
+}
 
     function getAssetPrice(
         Asset memory depositAsset,
