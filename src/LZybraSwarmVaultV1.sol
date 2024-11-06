@@ -185,7 +185,9 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     function deposit(
         uint256 assetAmount,
         uint256 offerId,
-        uint256 mintAmount
+        uint256 mintAmount,
+        bool isDynamic,
+        uint256 maximumDepositToWithdrawalRate
     ) external virtual nonReentrant {
         // Ensure asset amount is greater than zero
         require(assetAmount > 0, "Deposit amount must be greater than 0");
@@ -205,9 +207,11 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         _approveIfNeeded(address(collateralAsset), address(dotv2), assetAmount);
 
-        // Fetch the price of the withdrawal asset and the exchange rate
+        uint256 depositToWithdrawalRate;
+        uint256 receivedWithdrawalAmount;
 
-        (uint256 depositToWithdrawalRate, ) = getAssetPrice(
+        // Fetch the price of the withdrawal asset and the exchange rate
+        (depositToWithdrawalRate, ) = getAssetPrice(
             Asset({
                 assetType: AssetType.ERC20,
                 assetAddress: address(collateralAsset),
@@ -218,13 +222,31 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             offer.withdrawalAsset,
             offer.offer.offerPrice
         );
-        // Create the offer in dotv2
-        dotv2.takeOfferFixed(offerId, assetAmount, address(this));
 
-        uint256 receivedWithdrawalAmount = assetAmount.fullMulDiv(
-            depositToWithdrawalRate,
-            10 ** IERC20(offer.withdrawalAsset.assetAddress).decimals()
-        );
+        if (isDynamic) {
+            // Dynamic Deposit Handling
+            dotv2.takeOfferDynamic(
+                offerId,
+                assetAmount,
+                maximumDepositToWithdrawalRate,
+                address(this)
+            );
+
+            // Fetch updated offer to get the remaining amount after deposit
+            DotcOffer memory newOffer = dotv2.allOffers(offerId);
+            receivedWithdrawalAmount =
+                newOffer.withdrawalAsset.amount -
+                offer.withdrawalAsset.amount;
+        } else {
+            // Fixed Deposit Handling
+            dotv2.takeOfferFixed(offerId, assetAmount, address(this));
+
+            // Calculate received withdrawal amount based on fixed rate
+            receivedWithdrawalAmount = assetAmount.fullMulDiv(
+                depositToWithdrawalRate,
+                10 ** IERC20(offer.withdrawalAsset.assetAddress).decimals()
+            );
+        }
 
         // Update the user's asset balance in UserAsset mapping
         UserAsset[msg.sender][
@@ -239,7 +261,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             offer.withdrawalAsset.assetAddress
         );
 
-        // Emit deposit event
+        // Emit deposit event with relevant details
         emit DepositAsset(msg.sender, address(collateralAsset), assetAmount);
     }
 
@@ -363,18 +385,19 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         bytes[] calldata priceUpdate
     ) external payable nonReentrant {
         // Fetch collateral ratio and validate liquidation threshold
+        address t_address = asset.assetAddress;
         (
             bool shouldLiquidate,
             uint256 collateralRatio
         ) = getCollateralRatioAndLiquidationInfo(
                 onBehalfOf,
-                asset.assetAddress,
+                t_address,
                 priceUpdate
             );
         require(shouldLiquidate, "Above liquidation threshold");
 
         uint256 maxLiquidationAmount = UserAsset[onBehalfOf][
-            asset.assetAddress
+            t_address
         ] / 2;
         require(assetAmount <= maxLiquidationAmount, "Max 50% collateral");
 
@@ -386,7 +409,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         );
 
         uint256 LZYBRAAmount = (assetAmount *
-            getAssetPriceOracle(asset.assetAddress, priceUpdate)) / 1e18;
+            getAssetPriceOracle(t_address, priceUpdate)) / 1e18;
 
         uint256 keeperReward = 0;
         uint256 reducedAsset = assetAmount;
@@ -403,7 +426,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
                 collateralRatio >= 1e20 + keeperRatio * 1e18
             ) {
                 keeperReward = (assetAmount * keeperRatio) / 100;
-                IERC20(asset.assetAddress).safeTransfer(
+                IERC20(t_address).safeTransfer(
                     msg.sender,
                     keeperReward
                 );
@@ -411,14 +434,14 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         }
 
         // Repay debt and adjust balances
-        _repay(provider, onBehalfOf, asset.assetAddress, LZYBRAAmount);
-        IERC20(asset.assetAddress).safeTransfer(
+        _repay(provider, onBehalfOf, t_address, LZYBRAAmount);
+        IERC20(t_address).safeTransfer(
             provider,
             reducedAsset - keeperReward
         );
 
         // Adjust UserAsset storage in a single update
-        UserAsset[onBehalfOf][asset.assetAddress] -=
+        UserAsset[onBehalfOf][t_address] -=
             reducedAsset +
             keeperReward;
 
@@ -637,18 +660,17 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
     function calc_share(
-    uint256 amount,
-    address asset,
-    address user
-) internal view returns (uint256) {
-    uint256 borrowedAmount = borrowed[user][asset];
-    uint256 userAssetAmount = UserAsset[user][asset];
-    require(userAssetAmount > 0, "UserAsset must be greater than zero");
+        uint256 amount,
+        address asset,
+        address user
+    ) internal view returns (uint256) {
+        uint256 borrowedAmount = borrowed[user][asset];
+        uint256 userAssetAmount = UserAsset[user][asset];
+        require(userAssetAmount > 0, "UserAsset must be greater than zero");
 
-    // Calculate share with multiplication before division to maintain precision
-    return (borrowedAmount * amount) / userAssetAmount;
-}
-
+        // Calculate share with multiplication before division to maintain precision
+        return (borrowedAmount * amount) / userAssetAmount;
+    }
 
     function getCollateralRatioAndLiquidationInfo(
         address user,
@@ -729,7 +751,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             8,
             18
         );
-        
+
         // Return the price in 18 decimals
         return scaledPrice;
     }
