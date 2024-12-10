@@ -15,10 +15,12 @@
 pragma solidity ^0.8.17;
 
 import "../interfaces/Ilzybra.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 
 interface IProtocolRewardsPool {
     function notifyRewardAmount(uint256 amount, uint256 tokenType) external;
@@ -32,11 +34,8 @@ interface IVault {
     function getVaultType() external view returns (uint8);
 }
 
-interface ICurvePool{
-    function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns(uint256);
-}
 
-contract ZybraConfigurator is Ownable {
+contract ZybraConfigurator is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     using SafeERC20 for IERC20;
     mapping(address => bool) public mintVault;
     mapping(address => uint256) public mintVaultMaxSupply;
@@ -60,7 +59,6 @@ contract ZybraConfigurator is Ownable {
     // Limiting the maximum percentage of lzybra that can be cross-chain transferred to L2 in relation to the total supply.
     uint256 maxStableRatio;
     address public stableToken;
-    ICurvePool public curvePool;
     bool public premiumTradingEnabled;
 
 
@@ -82,7 +80,7 @@ contract ZybraConfigurator is Ownable {
 
 
     //stableToken = USDC
-     constructor(address _dao, address _stableToken) Ownable(msg.sender) {
+     constructor(address _stableToken) Ownable(msg.sender) {
         redemptionFee = 50;
         flashloanFee = 500;
         maxStableRatio = 5_000;
@@ -135,10 +133,7 @@ contract ZybraConfigurator is Ownable {
     }
 
 
-    function setCurvePool(address _curvePool) external onlyOwner {
-        emit CurvePoolChanged(address(curvePool), _curvePool, block.timestamp);
-        curvePool = ICurvePool(_curvePool);
-    }
+   
 
     /**
      * @notice Sets the status of premium trading.

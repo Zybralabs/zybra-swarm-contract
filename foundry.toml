@@ -1,15 +1,35 @@
+[default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.19"  # Default Solidity version
+
 [profile.default]
 src = "src"
 out = "out"
-solc_version = "0.8.19"  # default version
-[profile.solidity]
-version = ["0.8.19", "0.8.20", "0.8.1"]  # add other versions as needed
+solc_version = "0.8.19"
 libs = ["lib"]
+
+[profile.solidity]
+versions = ["0.8.19", "0.6.12"]
+libs = ["lib"]
+
 [profile.test]
-src = 'out'
+src = "src"
+out = "out"
+libs = ["lib"]
 remappings = [
-   '@openzeppelin/=lib/openzeppelin-contracts/',
-    'lib/openzeppelin-contracts-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/'
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+    "@pythnetwork/pyth-sdk-solidity/=node_modules/@pythnetwork/pyth-sdk-solidity/",
+    "@uniswap/v3-periphery/=node_modules/@uniswap/v3-periphery/",
+    "@uniswap/v3-core/=node_modules/@uniswap/v3-core/",
+    "@chainlink/contracts-ccip/=node_modules/@chainlink/contracts-ccip/",
+    "solady/=node_modules/solady/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "@openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+    "@ds-test/=lib/forge-std/lib/ds-test/src/",
+    "@forge-std/=lib/forge-std/src/",
+    "./=src/"
 ]
-[dependencies]
-forge-std = "1.2.0"
+

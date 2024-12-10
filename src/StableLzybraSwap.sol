@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+
+import "./interfaces/AggregatorV2V3Interface.sol";
 import "./interfaces/ILZYBRA.sol";
 
-contract StableLzybraSwap is ReentrancyGuard, Ownable {
-    IERC20 public usdc;
+contract StableLzybraSwap is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
+    IERC20Upgradeable public usdc;
     ILZYBRA public lzybra;
     AggregatorV3Interface public ethUsdPriceFeed;
     
-    uint256 public mintFeePercent = 1; // Fee percentage (1%)
-    uint256 public burnFeePercent = 1; // Fee percentage (1%)
-    uint256 public minMintAmount = 10 * 1e18; // Minimum amount for minting, example: $10
-    uint256 public maxMintAmount = 10000 * 1e18; // Maximum amount for minting, example: $10,000
+    uint256 public mintFeePercent;
+    uint256 public burnFeePercent;
+    uint256 public minMintAmount;
+    uint256 public maxMintAmount;
     
     address public feeCollector;
 
@@ -31,17 +33,37 @@ contract StableLzybraSwap is ReentrancyGuard, Ownable {
         _;
     }
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /**
+     * @dev Initialize the contract. Replaces constructor for upgradeable contracts.
+     */
+    function initialize(
         address _usdc,
         address _lzybra,
         address _ethUsdPriceFeed,
         address _feeCollector
-    ) {
-        usdc = IERC20(_usdc);
+    ) external initializer {
+        __ReentrancyGuard_init();
+        __Ownable_init();
+        __UUPSUpgradeable_init();
+
+        usdc = IERC20Upgradeable(_usdc);
         lzybra = ILZYBRA(_lzybra);
         ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
         feeCollector = _feeCollector;
+
+        mintFeePercent = 1;        // Default 1% mint fee
+        burnFeePercent = 1;        // Default 1% burn fee
+        minMintAmount = 10 * 1e18; // Minimum amount for minting, e.g., $10
+        maxMintAmount = 10000 * 1e18; // Maximum amount for minting, e.g., $10,000
     }
+
+    // --- UUPS Upgradeability Requirement ---
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // --- Minting Functions ---
 

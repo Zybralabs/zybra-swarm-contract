@@ -207,6 +207,8 @@ contract LzybraVaultWithdrawTest is BaseTest {
     }
 
     // Helper contract to simulate a reentrancy attack
+
+}
     contract ReentrancyAttacker {
         LzybraVault public vault;
 
@@ -222,4 +224,3 @@ contract LzybraVaultWithdrawTest is BaseTest {
             vault.withdraw(offerId, amount);
         }
     }
-}

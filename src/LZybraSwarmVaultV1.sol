@@ -10,17 +10,17 @@ import "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 import "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "lib/openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
-import "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
-import "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import "lib/openzeppelin-contracts/contracts/access/OwnableUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import {AssetHelper} from "./helpers/AssetHelper.sol";
-import {Asset, AssetType, AssetPrice, OfferStruct, OfferPrice, DotcOffer} from "./structures/DotcStructuresV2.sol";
+import {Asset, AssetType, assetPrice, OfferStruct, OfferPrice, DotcOffer} from "./structures/DotcStructuresV2.sol";
 import {SafeTransferLib, FixedPointMathLib} from "./exports/ExternalExports.sol";
 import {OfferHelper} from "./helpers/OfferHelper.sol";
 import {DotcOfferHelper} from "./helpers/DotcOfferHelper.sol";
 
-contract LzybraVault is Ownable, ReentrancyGuard {
+contract LzybraVault is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable  {
     using SafeERC20 for IERC20;
 
     using SafeTransferLib for address;
@@ -34,20 +34,20 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     /// @dev Used for Dotc Offer interaction.
     using DotcOfferHelper for DotcOffer;
 
-    ILZYBRA public Lzybra;
+    ILZYBRA public lzybra;
     address public usdc_price_feed;
     Iconfigurator public configurator;
     IDotcV2 public dotv2;
     IPyth public pyth;
-    AggregatorV2V3Interface internal priceFeed;
+    AggregatorV2V3Interface internal _priceFeed;
     IERC20 public collateralAsset;
-    uint256 poolTotalCirculation;
+    uint256 public poolTotalCirculation;
 
-    mapping(address => mapping(address => uint256)) public UserAsset; // User withdraw request tranche asset amount
+    mapping(address => mapping(address => uint256)) public userAsset; // User withdraw request tranche asset amount
     mapping(address => mapping(address => uint256)) public borrowed;
     mapping(address => uint256) public feeStored;
-    mapping(address => uint256) feeUpdatedAt;
-    mapping(address => bytes32) public ASSET_ORACLE;
+    mapping(address => uint256) _feeUpdatedAt;
+    mapping(address => bytes32) public assetOracle;
 
     event DepositAsset(
         address indexed onBehalfOf,
@@ -57,12 +57,6 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     event CancelDepositRequest(address indexed onBehalfOf, address asset);
 
     event WithdrawAsset(address indexed sponsor, address asset, uint256 amount);
-    event Mint(address indexed sponsor, uint256 amount);
-    event Burn(
-        address indexed sponsor,
-        address indexed onBehalfOf,
-        uint256 amount
-    );
     event LiquidationRecord(
         address indexed provider,
         address indexed keeper,
@@ -73,7 +67,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
     modifier onlyExistingAsset(address _asset) {
         require(
-            ASSET_ORACLE[_asset] != bytes32(0),
+            assetOracle[_asset] != bytes32(0),
             "Asset not found in the oracle."
         );
         _;
@@ -97,7 +91,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         // Initialize state variables
         collateralAsset = IERC20(_collateralAsset);
-        Lzybra = ILZYBRA(_lzybra);
+        lzybra = ILZYBRA(_lzybra);
         dotv2 = IDotcV2(_dotcv2);
         configurator = Iconfigurator(_configurator);
         usdc_price_feed = _usdc_price_feed;
@@ -108,7 +102,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         // Initialize fees and other mappings
         // Set default timestamps and fee storage
-        // feeUpdatedAt and feeStored mappings will start with zero values
+        // _feeUpdatedAt and _feeStored mappings will start with zero values
     }
 
     function _authorizeUpgrade(
@@ -152,15 +146,15 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             assetAddress: address(collateralAsset),
             amount: assetAmount,
             tokenId: 0,
-            assetPrice: AssetPrice(usdc_price_feed, 0, 0)
+            assetPrice: assetPrice(usdc_price_feed, 0, 0)
         });
 
         // Create the offer in dotv2
         dotv2.makeOffer(usdc_asset, withdrawalAsset, offer);
 
-        UserAsset[msg.sender][usdc_asset.assetAddress] += assetAmount;
+        userAsset[msg.sender][usdc_asset.assetAddress] += assetAmount;
 
-        // Mint Lzybra tokens based on the asset price and deposit amount
+        // Mint lzybra tokens based on the asset price and deposit amount
         _mintLZYBRA(
             msg.sender,
             assetAmount,
@@ -194,7 +188,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         DotcOffer memory offer = dotv2.allOffers(offerId);
         require(
-            ASSET_ORACLE[offer.withdrawalAsset.assetAddress] != bytes32(0),
+            assetOracle[offer.withdrawalAsset.assetAddress] != bytes32(0),
             "Asset not found in our list."
         );
 
@@ -217,7 +211,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
                 assetAddress: address(collateralAsset),
                 amount: assetAmount,
                 tokenId: 0,
-                assetPrice: AssetPrice(usdc_price_feed, 0, 0)
+                assetPrice: assetPrice(usdc_price_feed, 0, 0)
             }),
             offer.withdrawalAsset,
             offer.offer.offerPrice
@@ -248,8 +242,8 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             );
         }
 
-        // Update the user's asset balance in UserAsset mapping
-        UserAsset[msg.sender][
+        // Update the user's asset balance in userAsset mapping
+        userAsset[msg.sender][
             offer.withdrawalAsset.assetAddress
         ] += receivedWithdrawalAmount;
 
@@ -287,7 +281,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
 
         DotcOffer memory offer = dotv2.allOffers(offerId);
         address depositAssetAddr = offer.depositAsset.assetAddress;
-        uint256 userAsset = UserAsset[msg.sender][depositAssetAddr];
+        uint256 userAsset = userAsset[msg.sender][depositAssetAddr];
 
         // Ensure user has enough assets to withdraw
         require(
@@ -340,21 +334,21 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         }
 
         // Calculate and subtract fees, ensuring valid amount is received
-        uint256 fee = feeStored[msg.sender];
+        uint256 fee = _feeStored[msg.sender];
         require(receivingAmount > fee, "TZA");
         receivingAmount -= fee;
 
-        // Calculate and repay Lzybra based on user's share
+        // Calculate and repay lzybra based on user's share
         _repay(
             msg.sender,
             msg.sender,
             depositAssetAddr,
-            calc_share(assetAmount, depositAssetAddr, msg.sender)
+            _calcShare(assetAmount, depositAssetAddr, msg.sender)
         );
 
         // Update user balance in storage
         unchecked {
-            UserAsset[msg.sender][depositAssetAddr] = userAsset - assetAmount;
+            userAsset[msg.sender][depositAssetAddr] = userAsset - assetAmount;
         }
 
         // Transfer remaining collateral after fee deduction
@@ -365,10 +359,10 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Keeper liquidates borrowers whose collateral ratio is below badCollateralRatio, using Lzybra provided by Liquidation Provider.
+     * @notice Keeper liquidates borrowers whose collateral ratio is below badCollateralRatio, using lzybra provided by Liquidation Provider.
      *
      * Requirements:
-     * - provider should authorize Zybra to utilize Lzybra
+     * - provider should authorize Zybra to utilize lzybra
      * - onBehalfOf Collateral Ratio should be below badCollateralRatio
      * - assetAmount should be less than 50% of collateral
      * - asset Asset to be Liquidated
@@ -385,31 +379,31 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         bytes[] calldata priceUpdate
     ) external payable nonReentrant {
         // Fetch collateral ratio and validate liquidation threshold
-        address t_address = asset.assetAddress;
+        address tAddress = asset.assetAddress;
         (
             bool shouldLiquidate,
             uint256 collateralRatio
         ) = getCollateralRatioAndLiquidationInfo(
                 onBehalfOf,
-                t_address,
+                tAddress,
                 priceUpdate
             );
         require(shouldLiquidate, "Above liquidation threshold");
 
-        uint256 maxLiquidationAmount = UserAsset[onBehalfOf][
-            t_address
+        uint256 maxLiquidationAmount = userAsset[onBehalfOf][
+            tAddress
         ] / 2;
         require(assetAmount <= maxLiquidationAmount, "Max 50% collateral");
 
         // Authorization check for provider
         require(
-            Lzybra.allowance(provider, address(this)) != 0 ||
+            lzybra.allowance(provider, address(this)) != 0 ||
                 msg.sender == provider,
             "Provider must authorize"
         );
 
-        uint256 LZYBRAAmount = (assetAmount *
-            getAssetPriceOracle(t_address, priceUpdate)) / 1e18;
+        uint256 lzybraAmount = (assetAmount *
+            getAssetPriceOracle(tAddress, priceUpdate)) / 1e18;
 
         uint256 keeperReward = 0;
         uint256 reducedAsset = assetAmount;
@@ -426,7 +420,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
                 collateralRatio >= 1e20 + keeperRatio * 1e18
             ) {
                 keeperReward = (assetAmount * keeperRatio) / 100;
-                IERC20(t_address).safeTransfer(
+                IERC20(tAddress).safeTransfer(
                     msg.sender,
                     keeperReward
                 );
@@ -434,14 +428,14 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         }
 
         // Repay debt and adjust balances
-        _repay(provider, onBehalfOf, t_address, LZYBRAAmount);
-        IERC20(t_address).safeTransfer(
+        _repay(provider, onBehalfOf, tAddress, lzybraAmount);
+        IERC20(tAddress).safeTransfer(
             provider,
             reducedAsset - keeperReward
         );
 
-        // Adjust UserAsset storage in a single update
-        UserAsset[onBehalfOf][t_address] -=
+        // Adjust userAsset storage in a single update
+        userAsset[onBehalfOf][tAddress] -=
             reducedAsset +
             keeperReward;
 
@@ -449,7 +443,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             provider,
             msg.sender,
             onBehalfOf,
-            LZYBRAAmount,
+            lzybraAmount,
             reducedAsset
         );
     }
@@ -457,12 +451,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     function repayingDebt(
         address provider,
         address asset,
-        uint256 lzybra_amount,
+        uint256 lzybraAmount,
         bytes[] calldata priceUpdate
     ) external payable virtual {
         require(
-            borrowed[asset][provider] >= lzybra_amount,
-            "lzybra_amount cannot surpass providers debt"
+            borrowed[asset][provider] >= lzybraAmount,
+            "lzybraAmount cannot surpass providers debt"
         );
         (
             ,
@@ -474,12 +468,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
             providerCollateralRatio >=
                 configurator.getSafeCollateralRatio(address(this))
         );
-        _repay(provider, asset, provider, lzybra_amount);
+        _repay(provider, asset, provider, lzybraAmount);
         emit RigidRedemption(
             msg.sender,
             provider,
             asset,
-            lzybra_amount,
+            lzybraAmount,
             collateralAmount
         );
     }
@@ -501,10 +495,10 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         address purchasedAsset = offer.withdrawalAsset.assetAddress;
 
         // Update the user's asset balance to reflect the purchased asset
-        UserAsset[msg.sender][purchasedAsset] += receivedAmount;
+        userAsset[msg.sender][purchasedAsset] += receivedAmount;
 
         // Clear USDC holdings and transfer ownership
-        UserAsset[msg.sender][address(collateralAsset)] = 0;
+        userAsset[msg.sender][address(collateralAsset)] = 0;
 
         // Repay any outstanding fees and adjust borrowed balance
         _updateFee(msg.sender, purchasedAsset);
@@ -535,13 +529,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         borrowed[_provider][asset] += _mintAmount;
         _checkHealth(_provider, asset, _assetPrice);
 
-        Lzybra.mint(_provider, _mintAmount);
+        lzybra.mint(_provider, _mintAmount);
         poolTotalCirculation += _mintAmount;
-        emit Mint(_provider, _mintAmount);
     }
 
     /**
-     * @notice Burn _provideramount Lzybra to payback minted Lzybra for _onBehalfOf.
+     * @notice Burn _provideramount lzybra to payback minted lzybra for _onBehalfOf.
      *
      * @dev rePAY the User debt so the Collateral Ratio for user is mantained.
      */
@@ -552,12 +545,11 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         uint256 _amount
     ) internal virtual {
         _updateFee(_onBehalfOf, asset);
-        Lzybra.transferFrom(_provider, address(this), _amount);
-        Lzybra.burn(_provider, _amount);
+        lzybra.transferFrom(_provider, address(this), _amount);
+        lzybra.burn(_provider, _amount);
         borrowed[_onBehalfOf][asset] -= _amount;
         poolTotalCirculation -= _amount;
 
-        emit Burn(_provider, _onBehalfOf, _amount);
     }
 
     function addPriceFeed(
@@ -566,7 +558,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         address chainlinkAggregator
     ) public virtual onlyOwner {
         // Set the Pyth price feed ID for the asset
-        ASSET_ORACLE[_asset] = pythPriceId;
+        assetOracle[_asset] = pythPriceId;
 
         // Set the Chainlink price feed address for the asset if provided
         if (chainlinkAggregator != address(0)) {
@@ -575,7 +567,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Get USD value of current collateral asset and minted Lzybra through price oracle / Collateral asset USD value must higher than safe Collateral Ratio.
+     * @dev Get USD value of current collateral asset and minted lzybra through price oracle / Collateral asset USD value must higher than safe Collateral Ratio.
      */
     function _checkHealth(
         address user,
@@ -583,7 +575,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         uint256 price
     ) internal view {
         if (
-            ((UserAsset[user][asset] * price * 100) /
+            ((userAsset[user][asset] * price * 100) /
                 getBorrowed(user, asset)) <
             configurator.getSafeCollateralRatio(address(this))
         ) revert("collateralRatio is Below safeCollateralRatio");
@@ -604,9 +596,9 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
     function _updateFee(address user, address asset) internal {
-        if (block.timestamp > feeUpdatedAt[user]) {
-            feeStored[user] += _newFee(user, asset);
-            feeUpdatedAt[user] = block.timestamp;
+        if (block.timestamp > _feeUpdatedAt[user]) {
+            _feeStored[user] += _newFee(user, asset);
+            _feeUpdatedAt[user] = block.timestamp;
         }
     }
 
@@ -617,7 +609,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         return
             (borrowed[user][asset] *
                 100 *
-                (block.timestamp - feeUpdatedAt[user])) /
+                (block.timestamp - _feeUpdatedAt[user])) /
             (86_400 * 365) /
             10_000;
     }
@@ -659,14 +651,14 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         return poolTotalCirculation;
     }
 
-    function calc_share(
+    function _calcShare(
         uint256 amount,
         address asset,
         address user
     ) internal view returns (uint256) {
         uint256 borrowedAmount = borrowed[user][asset];
-        uint256 userAssetAmount = UserAsset[user][asset];
-        require(userAssetAmount > 0, "UserAsset must be greater than zero");
+        uint256 userAssetAmount = userAsset[user][asset];
+        require(userAssetAmount > 0, "userAsset must be greater than zero");
 
         // Calculate share with multiplication before division to maintain precision
         return (borrowedAmount * amount) / userAssetAmount;
@@ -678,11 +670,11 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         bytes[] calldata priceUpdate
     ) public view returns (bool shouldLiquidate, uint256 collateralRatio) {
         // Get the user's asset amount and the current price of the asset
-        uint256 userCollateralAmount = UserAsset[user][asset];
-        uint256 AssetPrice = getAssetPriceOracle(asset, priceUpdate);
+        uint256 userCollateralAmount = userAsset[user][asset];
+        uint256 assetPrice = getAssetPriceOracle(asset, priceUpdate);
 
         // Calculate the USD value of the collateral
-        uint256 collateralValueInUSD = (userCollateralAmount * AssetPrice) /
+        uint256 collateralValueInUSD = (userCollateralAmount * assetPrice) /
             1e18;
 
         // Get the user's total borrowed amount in LZYBRA (assumed to be in USD)
@@ -694,7 +686,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         }
 
         // Calculate the collateral ratio
-        collateralRatio = (collateralValueInUSD * 1e18) / userDebtAmount;
+        collateralRatio = ((collateralValueInUSD * 1e18) / userDebtAmount) * 100;
 
         // Determine if the collateral ratio falls below the liquidation threshold
         uint256 badCollateralRatio = configurator.getBadCollateralRatio(
@@ -733,13 +725,13 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         int64 priceInt;
 
         // Attempt to get the primary price feed from Pyth (Pyth returns prices with 8 decimals)
-        try pyth.getPriceNoOlderThan(ASSET_ORACLE[_asset], 60) returns (
+        try pyth.getPriceNoOlderThan(assetOracle[_asset], 60) returns (
             PythStructs.Price memory priceData
         ) {
             priceInt = priceData.price;
         } catch {
             // Fallback mechanism: use Chainlink price if available
-            return getFallbackPrice(_asset);
+            return _getFallbackPrice(_asset);
         }
 
         // Ensure the price is non-negative
@@ -757,7 +749,7 @@ contract LzybraVault is Ownable, ReentrancyGuard {
     }
 
     // Fallback price function for Chainlink (already 8 decimals)
-    function getFallbackPrice(address _asset) internal view returns (uint256) {
+    function _getFallbackPrice(address _asset) internal view returns (uint256) {
         // Get the Chainlink oracle address for the asset
         address chainlinkOracle = chainlinkOracles[_asset];
 
@@ -768,12 +760,12 @@ contract LzybraVault is Ownable, ReentrancyGuard {
         );
 
         // Initialize the Chainlink price feed interface
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(
+        AggregatorV3Interface _priceFeed = AggregatorV3Interface(
             chainlinkOracle
         );
 
         // Fetch the latest price from Chainlink
-        (, int256 price, , , ) = priceFeed.latestRoundData();
+        (, int256 price, , , ) = _priceFeed.latestRoundData();
 
         // Ensure the price is non-negative
         require(price > 0, "Chainlink price feed returned a negative value.");

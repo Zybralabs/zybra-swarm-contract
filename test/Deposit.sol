@@ -494,21 +494,7 @@ function testReentrancyAttackOnDeposit() public {
 }
 
 // Helper contract to simulate a reentrancy attack on deposit
-contract ReentrancyAttacker {
-    LzybraVault public vault;
 
-    constructor(address _vault) {
-        vault = LzybraVault(_vault);
-    }
-
-    fallback() external payable {
-        vault.deposit(1 ether, 1, 1 ether); // Attempt reentrant call within deposit
-    }
-
-    function attackDeposit(uint256 amount, uint256 offerId, uint256 mintAmount) public {
-        vault.deposit(amount, offerId, mintAmount);
-    }
-}
 
 
 function testDepositExceedingMaximumOfferLimit() public {
@@ -615,4 +601,19 @@ function testUnauthorizedAccessToDeposit() public {
 }
 
 
+}
+contract ReentrancyAttacker {
+    LzybraVault public vault;
+
+    constructor(address _vault) {
+        vault = LzybraVault(_vault);
+    }
+
+    fallback() external payable {
+        vault.deposit(1 ether, 1, 1 ether); // Attempt reentrant call within deposit
+    }
+
+    function attackDeposit(uint256 amount, uint256 offerId, uint256 mintAmount) public {
+        vault.deposit(amount, offerId, mintAmount);
+    }
 }

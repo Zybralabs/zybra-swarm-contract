@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "./StableLzybraSwap.sol";
 
@@ -13,18 +16,18 @@ interface IVaultManager {
     function liquidateVault(address vaultOwner, address collateralAsset, uint256 assetAmount, bytes[] calldata priceUpdate) external payable;
 }
 
-contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
-    using SafeERC20 for IERC20;
+contract ZFIStakingLiquidation is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradeable, OwnableUpgradeable {
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
-    IERC20 public zfiToken;
+    IERC20Upgradeable public zfiToken;
     IVaultManager public vaultManager;
     StableLzybraSwap public stableLzybraSwap;
-    ISwapRouter public immutable uniswapRouter;
-
-    address public immutable WETH;
+    ISwapRouter public uniswapRouter;
+    address public WETH;
+    
     uint256 public totalStaked;
     uint256 public totalProfitDistributed;
-    uint256 public keeperRewardPercent = 2;  // Percent of liquidation profit to keepers
+    uint256 public keeperRewardPercent;
 
     struct Staker {
         uint256 amountStaked;
@@ -40,19 +43,35 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
     event LiquidationTriggered(address indexed liquidator, address indexed vaultOwner, uint256 profit, uint256 keeperReward);
     event RewardWithdrawn(address indexed user, uint256 reward);
 
-    constructor(
-        IERC20 _zfiToken,
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /**
+     * @dev Initializes the contract with the required parameters.
+     */
+    function initialize(
+        IERC20Upgradeable _zfiToken,
         IVaultManager _vaultManager,
         StableLzybraSwap _stableLzybraSwap,
         ISwapRouter _uniswapRouter,
         address _WETH
-    ) {
+    ) external initializer {
+        __ReentrancyGuard_init();
+        __Ownable_init();
+        __UUPSUpgradeable_init();
+
         zfiToken = _zfiToken;
         vaultManager = _vaultManager;
         stableLzybraSwap = _stableLzybraSwap;
         uniswapRouter = _uniswapRouter;
         WETH = _WETH;
+        keeperRewardPercent = 2;
     }
+
+    // --- UUPS Upgradeability Requirement ---
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // --- Uniswap and StableLzybraSwap Conversion Functions ---
 
@@ -77,8 +96,8 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
     }
 
     function _convertRwaToUSDC(address rwaToken, uint256 rwaAmount) internal returns (uint256) {
-        require(IERC20(rwaToken).balanceOf(address(this)) >= rwaAmount, "Insufficient RWA for conversion");
-        IERC20(rwaToken).safeApprove(address(stableLzybraSwap), rwaAmount);
+        require(IERC20Upgradeable(rwaToken).balanceOf(address(this)) >= rwaAmount, "Insufficient RWA for conversion");
+        IERC20Upgradeable(rwaToken).safeApprove(address(stableLzybraSwap), rwaAmount);
         uint256 usdcAmount = stableLzybraSwap.convertRwaToUSDC(rwaAmount);
         require(usdcAmount > 0, "RWA to USDC conversion failed");
 
@@ -86,7 +105,7 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
     }
 
     function _convertUSDCToZFIWithUniswap(uint256 usdcAmount) internal returns (uint256) {
-        IERC20 usdcToken = stableLzybraSwap.usdcToken();
+        IERC20Upgradeable usdcToken = stableLzybraSwap.usdcToken();
         require(usdcToken.balanceOf(address(this)) >= usdcAmount, "Insufficient USDC for conversion");
         usdcToken.safeApprove(address(uniswapRouter), usdcAmount);
 
@@ -143,23 +162,18 @@ contract ZFIStakingLiquidation is ReentrancyGuard, Ownable {
         uint256 assetAmount,
         bytes[] calldata priceUpdate
     ) external nonReentrant {
-        // Step 1: Fetch collateral and debt details from the VaultManager
         (uint256 collateralAmount, uint256 debtAmount) = vaultManager.getVaultCollateral(vaultOwner, collateralAsset);
         require(collateralAmount < debtAmount, "Vault is not undercollateralized");
 
-        // Step 2: Calculate required ZFI amount to convert to Lzybra
         uint256 amountToConvert = debtAmount - collateralAmount;
         _convertZFIToLzybra(amountToConvert);
 
-        // Step 3: Execute liquidation through VaultManager
         vaultManager.liquidateVault{value: msg.value}(vaultOwner, collateralAsset, assetAmount, priceUpdate);
 
-        // Step 4: Mock RWA conversion to USDC and USDC to ZFI
         uint256 rwaReceived = getRwaAmountFromLiquidation();
         uint256 usdcAmount = _convertRwaToUSDC(rwaReceived);
         uint256 profitAmount = _convertUSDCToZFIWithUniswap(usdcAmount);
 
-        // Step 5: Distribute profits between the keeper and stakers
         uint256 keeperReward = (profitAmount * keeperRewardPercent) / 100;
         uint256 stakerProfit = profitAmount - keeperReward;
 
