@@ -2,9 +2,9 @@
 pragma solidity 0.8.19;
 
 // Solady
-import { MetadataReaderLib } from "solady/src/utils/MetadataReaderLib.sol";
-import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
-import { Receiver } from "solady/src/accounts/Receiver.sol";
+import { MetadataReaderLib } from "../../node_modules/solady/src/utils/MetadataReaderLib.sol";
+import { FixedPointMathLib } from "../../node_modules/solady/src/utils/FixedPointMathLib.sol";
+import { Receiver } from "../../node_modules/solady/src/accounts/Receiver.sol";
 
 import {MessagesLib} from "../libraries/MessagesLib.sol";
 import {SafeTransferLib} from "../libraries/SafeTransferLib.sol";

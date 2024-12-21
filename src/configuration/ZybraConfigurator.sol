@@ -79,21 +79,17 @@ contract ZybraConfigurator is Initializable, UUPSUpgradeable, OwnableUpgradeable
     event FlashloanFeeUpdated(uint256 fee);
 
 
-    //stableToken = USDC
-     constructor(address _stableToken) Ownable(msg.sender) {
+
+function initialize(address _lzybra, address _stableToken) public initializer {
+        __Ownable_init();
         redemptionFee = 50;
         flashloanFee = 500;
         maxStableRatio = 5_000;
         stableToken = _stableToken;
+        lzybra = ILZYBRA(_lzybra);
     }
 
 
-    /**
-     * @notice Initializes the lzybra and lzybra address. This function can only be executed once.
-     */
-    function initToken( address _lzybra) external onlyOwner {
-        if (address(lzybra) == address(0)) lzybra = ILZYBRA(_lzybra);
-    }
 
     /**
      * @notice Controls the minting limit of lzybra for an asset pool.

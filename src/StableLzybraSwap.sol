@@ -5,6 +5,7 @@ import "lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/IERC20Upgra
 import "lib/openzeppelin-contracts-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
 import "lib/openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
+import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import "./interfaces/AggregatorV2V3Interface.sol";
 import "./interfaces/ILZYBRA.sol";

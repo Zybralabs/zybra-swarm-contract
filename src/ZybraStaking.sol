@@ -8,8 +8,9 @@ import "lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/utils/SafeE
 import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 
 import "lib/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "../node_modules/@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "./StableLzybraSwap.sol";
+import "./interfaces/IWETH.sol";
 
 interface IVaultManager {
     function getVaultCollateral(address vaultOwner, address collateralAsset) external view returns (uint256 collateralAmount, uint256 debtAmount);

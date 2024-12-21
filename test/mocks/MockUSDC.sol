@@ -13,7 +13,7 @@ import {IERC20} from "../../src/interfaces/IERC20.sol";
 contract MockUSDC is Auth, IERC20 {
     string public name;
     string public symbol;
-    uint8 public immutable decimals;
+    uint8  decimals;
     /// @inheritdoc IERC20
     uint256 public totalSupply;
 

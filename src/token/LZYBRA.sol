@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.19;
 
-import {BurnMintERC677} from "@chainlink/contracts-ccip/src/v0.8/shared/token/ERC677/BurnMintERC677.sol";
+import {BurnMintERC677} from "../../node_modules/@chainlink/contracts-ccip/src/v0.8/shared/token/ERC677/BurnMintERC677.sol";
 contract Lzybra is BurnMintERC677 {
    constructor(
         string memory name,
