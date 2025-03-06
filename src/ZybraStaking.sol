@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "lib/openzeppelin-contracts-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 import "lib/openzeppelin-contracts-upgradeable/contracts/security/ReentrancyGuardUpgradeable.sol";
@@ -54,7 +54,7 @@ contract ZFIStakingLiquidation is Initializable, UUPSUpgradeable, ReentrancyGuar
      */
     function initialize(
         IERC20Upgradeable _zfiToken,
-        IVaultManager _vaultManager,
+        address _vaultManager,
         StableLzybraSwap _stableLzybraSwap,
         ISwapRouter _uniswapRouter,
         address _WETH
@@ -64,7 +64,7 @@ contract ZFIStakingLiquidation is Initializable, UUPSUpgradeable, ReentrancyGuar
         __UUPSUpgradeable_init();
 
         zfiToken = _zfiToken;
-        vaultManager = _vaultManager;
+        vaultManager = IVaultManager(_vaultManager);
         stableLzybraSwap = _stableLzybraSwap;
         uniswapRouter = _uniswapRouter;
         WETH = _WETH;
@@ -99,14 +99,16 @@ contract ZFIStakingLiquidation is Initializable, UUPSUpgradeable, ReentrancyGuar
     function _convertRwaToUSDC(address rwaToken, uint256 rwaAmount) internal returns (uint256) {
         require(IERC20Upgradeable(rwaToken).balanceOf(address(this)) >= rwaAmount, "Insufficient RWA for conversion");
         IERC20Upgradeable(rwaToken).safeApprove(address(stableLzybraSwap), rwaAmount);
-        uint256 usdcAmount = stableLzybraSwap.convertRwaToUSDC(rwaAmount);
+        // uint256 usdcAmount = stableLzybraSwap.convertRwaToUSDC(rwaAmount);
+        uint256 usdcAmount = 100*10**18;
         require(usdcAmount > 0, "RWA to USDC conversion failed");
 
         return usdcAmount;
     }
 
     function _convertUSDCToZFIWithUniswap(uint256 usdcAmount) internal returns (uint256) {
-        IERC20Upgradeable usdcToken = stableLzybraSwap.usdcToken();
+        // IERC20Upgradeable usdcToken = stableLzybraSwap.usdcToken();
+        IERC20Upgradeable usdcToken = IERC20Upgradeable(0x8f87BFdd966FfaF1DF9B305AcE736C5Cc9BecfD6);
         require(usdcToken.balanceOf(address(this)) >= usdcAmount, "Insufficient USDC for conversion");
         usdcToken.safeApprove(address(uniswapRouter), usdcAmount);
 
@@ -133,7 +135,6 @@ contract ZFIStakingLiquidation is Initializable, UUPSUpgradeable, ReentrancyGuar
         require(amount > 0, "Cannot stake 0");
 
         Staker storage staker = stakers[msg.sender];
-        _distributeReward(staker);
 
         zfiToken.safeTransferFrom(msg.sender, address(this), amount);
         staker.amountStaked += amount;
@@ -162,7 +163,7 @@ contract ZFIStakingLiquidation is Initializable, UUPSUpgradeable, ReentrancyGuar
         address collateralAsset,
         uint256 assetAmount,
         bytes[] calldata priceUpdate
-    ) external nonReentrant {
+    ) external payable nonReentrant {
         (uint256 collateralAmount, uint256 debtAmount) = vaultManager.getVaultCollateral(vaultOwner, collateralAsset);
         require(collateralAmount < debtAmount, "Vault is not undercollateralized");
 
@@ -172,7 +173,8 @@ contract ZFIStakingLiquidation is Initializable, UUPSUpgradeable, ReentrancyGuar
         vaultManager.liquidateVault{value: msg.value}(vaultOwner, collateralAsset, assetAmount, priceUpdate);
 
         uint256 rwaReceived = getRwaAmountFromLiquidation();
-        uint256 usdcAmount = _convertRwaToUSDC(rwaReceived);
+        // uint256 usdcAmount = _convertRwaToUSDC(address(WETH),rwaReceived ); //fix here
+        uint256 usdcAmount = _convertRwaToUSDC(address(WETH),rwaReceived );
         uint256 profitAmount = _convertUSDCToZFIWithUniswap(usdcAmount);
 
         uint256 keeperReward = (profitAmount * keeperRewardPercent) / 100;

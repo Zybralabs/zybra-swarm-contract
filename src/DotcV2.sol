@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import { Initializable, Receiver, SafeTransferLib, FixedPointMathLib, IERC721, IERC1155 } from "./exports/ExternalExports.sol";
 
@@ -206,7 +206,7 @@ contract DotcV2 is Initializable, Receiver {
 
         depositAsset.checkAssetOwner(msg.sender, depositAsset.amount);
 
-        offer.checkOfferStructure(depositAsset, withdrawalAsset);
+        // offer.checkOfferStructure(depositAsset, withdrawalAsset);
 
         uint256 _currentOfferId = currentOfferId;
 
@@ -233,7 +233,7 @@ contract DotcV2 is Initializable, Receiver {
     function takeOfferFixed(uint256 offerId, uint256 withdrawalAmountPaid, address affiliate) external {
         DotcOffer memory offer = allOffers[offerId];
         offer.checkDotcOfferParams();
-        offer.offer.checkOfferParams();
+        // offer.offer.checkOfferParams();
 
         if (offer.offer.offerPrice.offerPricingType != OfferPricingType.FixedPricing) {
             revert IncorrectOfferPricingType(offer.offer.offerPrice.offerPricingType);

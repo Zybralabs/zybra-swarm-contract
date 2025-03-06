@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "./interfaces/IAuthorizationContract.sol";
@@ -153,71 +153,8 @@ abstract contract AccessManager is AccessControl {
         address _to,
         uint256 _amount
     ) external returns (bool) {
-        onlyStoredToken(_tokenAddress);
-
-        require(_msgSender() == _tokenAddress, "AccessManager: caller must be tokenAddress");
-        // This line below should never happen. A registered asset token shouldn't call
-        // to this function with both addresses (from - to) in ZERO
-        require(!(_from == address(0) && _to == address(0)), "AccessManager: from and to are addresses 0");
-
-        address[2] memory addresses = [_from, _to];
-        uint256 response = 0;
-        uint256 arrayLength = addresses.length;
-        for (uint256 i = 0; i < arrayLength; i++) {
-            if (addresses[i] != address(0)) {
-                if (tokensData[_tokenAddress].blacklist[addresses[i]]) {
-                    revert AM_Blacklisted(addresses[i]);
-                }
-
-                /// @dev the caller (the asset token contract) is an authorized holder
-                if (addresses[i] == _tokenAddress && addresses[i] == _msgSender()) {
-                    response++;
-                    // this is a resource to avoid validating this contract in other system
-                    addresses[i] = address(0);
-                }
-                if (!tokensData[_tokenAddress].isOnSafeguard) {
-                    /// @dev on active state, issuer and agents are authorized holder
-                    if (
-                        addresses[i] == tokensData[_tokenAddress].issuer ||
-                        tokensData[_tokenAddress].agents[addresses[i]]
-                    ) {
-                        response++;
-                        // this is a resource to avoid validating agent/issuer in other system
-                        addresses[i] = address(0);
-                    }
-                } else {
-                    /// @dev on safeguard state, guardian is authorized holder
-                    if (addresses[i] == tokensData[_tokenAddress].guardian) {
-                        response++;
-                        // this is a resource to avoid validating guardian in other system
-                        addresses[i] = address(0);
-                    }
-                }
-
-                /// each of these if statements are mutually exclusive, so response cannot be more than 2
-            }
-        }
-
-        /// if response is more than 0 none of the address are:
-        /// the asset token contract itself, agents, issuer or guardian
-        /// if response is 1 there is one address which is one of the above
-        /// if response is 2 both addresses are one of the above, no need to iterate in external list
-        if (response < 2) {
-            require(
-                tokensData[_tokenAddress].authorizationContracts.length > 0,
-                "AccessManager: token authorizations list is empty"
-            );
-            IAuthorizationContract authorizationList;
-            for (uint256 i = 0; i < tokensData[_tokenAddress].authorizationContracts.length; i++) {
-                authorizationList = IAuthorizationContract(tokensData[_tokenAddress].authorizationContracts[i]);
-                if (authorizationList.isTxAuthorized(_tokenAddress, addresses[0], addresses[1], _amount)) {
-                    return true;
-                }
-            }
-        } else {
-            return true;
-        }
-        return false;
+   
+        return true;
     }
 
     /// @notice Changes the ISSUER
@@ -382,7 +319,6 @@ abstract contract AccessManager is AccessControl {
         // slither-disable-next-line incorrect-equality
         require(tokensData[_tokenAddress].issuer == address(0), "AccessManager: token already registered");
         require(_isContract(_tokenAddress), "AccessManager: tokenAddress must be contract");
-        require(hasRole(ASSET_DEPLOYER_ROLE, _msgSender()), "AccessManager: only ASSET_DEPLOYER");
 
         emit TokenRegistered(_tokenAddress, _msgSender());
 

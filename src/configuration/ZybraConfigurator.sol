@@ -89,7 +89,11 @@ function initialize(address _lzybra, address _stableToken) public initializer {
         lzybra = ILZYBRA(_lzybra);
     }
 
-
+ function _authorizeUpgrade(address newImplementation)
+        internal
+        onlyOwner
+        override
+    {}
 
     /**
      * @notice Controls the minting limit of lzybra for an asset pool.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./DSMath.sol";
@@ -27,6 +27,7 @@ contract AssetTokenData is AccessManager {
         require(_maxQtyOfAuthorizationLists < 100, "AssetTokenData: maxQtyOfAuthorizationLists must be < 100");
 
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _grantRole(ASSET_DEPLOYER_ROLE, _msgSender());
         maxQtyOfAuthorizationLists = _maxQtyOfAuthorizationLists;
     }
 

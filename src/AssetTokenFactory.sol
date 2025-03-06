@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import "./AssetToken.sol";
@@ -40,6 +40,7 @@ contract AssetTokenFactory is AccessControlUpgradeable {
         require(_assetTokenDataAddress != address(0), "AssetTokenFactory: assetTokenData is address 0");
 
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _setupRole(ASSET_DEPLOYER_ROLE, _msgSender());
         assetTokenDataAddress = _assetTokenDataAddress;
     }
 

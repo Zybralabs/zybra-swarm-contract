@@ -2,18 +2,18 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-solc_version = "0.8.19"  # Default Solidity version
+solc_version = "0.8.20"  # Default Solidity version
 optimizer = true
-optimizer_runs = 200
-
+optimizer_runs = 1000
+via-ir = true
 [profile.default]
 src = "src"
 out = "out"
-solc_version = "0.8.19"
+solc_version = "0.8.20"
 libs = ["lib"]
 
 [profile.solidity]
-versions = ["0.8.19", "0.6.12"]
+versions = ["0.8.20", "0.6.12"]
 libs = ["lib"]
 
 [profile.test]
@@ -36,4 +36,10 @@ remappings = [
     "@pythnetwork/=node_modules/@pythnetwork/",
     "@uniswap/=node_modules/@uniswap/",
     "test/mocks/=src/test/mocks/"
+]
+
+libraries = [
+    "src/helpers/AssetHelper.sol:AssetHelper:${ASSET_HELPER_ADDRESS}",
+    "src/helpers/OfferHelper.sol:OfferHelper:${OFFER_HELPER_ADDRESS}",
+    "src/helpers/DotcOfferHelper.sol:DotcOfferHelper:${DOTC_OFFER_HELPER_ADDRESS}"
 ]

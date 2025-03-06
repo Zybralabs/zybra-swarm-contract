@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import { AssetHelper } from "./helpers/AssetHelper.sol";
 import { DotcV2 } from "./DotcV2.sol";

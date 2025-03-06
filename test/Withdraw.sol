@@ -1,5 +1,5 @@
 // // SPDX-License-Identifier: BUSL-1.1
-// pragma solidity ^0.8.19;
+// pragma solidity ^0.8.20;
 
 // import "forge-std/Test.sol";
 // import {Asset, AssetType, AssetPrice, OfferFillType, PercentageType, OfferPrice, OfferStruct, DotcOffer, OnlyManager, OfferPricingType, TakingOfferType} from "../src/structures/DotcStructuresV2.sol";
@@ -210,10 +210,10 @@
 
 // }
 //     contract ReentrancyAttacker {
-//         LzybraVault public vault;
+//         ZybraVault public vault;
 
 //         constructor(address _vault) {
-//             vault = LzybraVault(_vault);
+//             vault = ZybraVault(_vault);
 //         }
 
 //         fallback() external payable {

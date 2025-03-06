@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
-import { Asset, DotcOffer, OfferStruct } from "../structures/DotcStructuresV2.sol";
+import {Asset, AssetType, AssetPrice, OfferStruct, OfferPrice, DotcOffer, OfferFillType} from "../structures/DotcStructuresV2.sol";
 import { DotcEscrowV2 } from "../DotcEscrowV2.sol";
 
 interface IDotcV2 {
@@ -37,6 +37,11 @@ interface IDotcV2 {
     /// View functions
     function currentOfferId() external view returns (uint256);
 
-    function allOffers(uint256 offerId) external view returns (DotcOffer memory);
+    function allOffers(uint256 offerId) external view returns ( 
+        address maker,
+        OfferFillType offerFillType,
+        Asset memory depositAsset,
+        Asset memory withdrawalAsset,
+        OfferStruct memory offerDetails);
 
 }
