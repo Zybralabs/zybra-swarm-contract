@@ -4,7 +4,7 @@ pragma solidity 0.8.20;
 import "forge-std/Script.sol";
 import "../src/token/ERC20.sol";
 import "forge-std/console2.sol";
-import {Lzybra} from "../src/token/LZYBRA.sol";
+import {Zrusd} from "../src/token/ZRUSD.sol";
 import {AssetTokenData} from "../src/AssetTokenData.sol";
 import {AssetToken} from "../src/AssetToken.sol";
 import {AssetTokenFactory} from "../src/AssetTokenFactory.sol";
@@ -34,7 +34,7 @@ contract FullDeployment is Script {
     ERC20 public asset2;
     ERC20 public asset3;
 
-    Lzybra public lzybra;
+    Zrusd public zrusd;
     ZybraVault public lzybravault;
     ZybraConfigurator public configurator;
     DotcV2 public dotcV2;
@@ -250,8 +250,8 @@ contract FullDeployment is Script {
 
         // Mint initial tokens
 
-        // Step 3: Deploy Lzybra Token
-        lzybra = new Lzybra("Lzybra", "LZYB");
+        // Step 3: Deploy Zrusd Token
+        zrusd = new Zrusd("Zrusd", "LZYB");
 
         // Step 4: Deploy Price Feeds
         ChainLinkMockUSDC = new mockChainlink();
@@ -308,7 +308,7 @@ contract FullDeployment is Script {
             address(configuratorImpl),
             abi.encodeWithSelector(
                 ZybraConfigurator.initialize.selector,
-                address(lzybra),
+                address(zrusd),
                 address(USDC)
             )
         );
@@ -321,7 +321,7 @@ contract FullDeployment is Script {
         //     abi.encodeWithSelector(
         //         ZybraVault.initialize.selector,
         //         address(USDC),
-        //         address(lzybra),
+        //         address(zrusd),
         //         address(dotcV2),
         //         address(configurator),
         //         address(ChainLinkMockUSDC),
@@ -333,7 +333,7 @@ contract FullDeployment is Script {
 
         ZybraVault lzybravault = new ZybraVault(
             address(USDC),
-            address(lzybra),
+            address(zrusd),
             address(dotcV2),
             address(configurator),
             address(ChainLinkMockUSDC),
@@ -345,7 +345,7 @@ contract FullDeployment is Script {
         //     abi.encodeWithSelector(
         //         ZybraVault.initialize.selector,
         //         address(USDC),
-        //         address(lzybra),
+        //         address(zrusd),
         //         address(dotcV2),
         //         address(configurator),
         //         address(ChainLinkMockUSDC),
@@ -473,9 +473,9 @@ contract FullDeployment is Script {
         console.log("Mint ID MCSF:", asset2.balanceOf(deployer));
         console.log("Mint ID TESLA:", asset3.balanceOf(deployer));
 
-        // Step 5: Deploy Lzybra Token
-        Lzybra lzybra = Lzybra(0xBcf5a240fF41DdCC06E4e381D389be34F839E798);
-        console.log("Lzybra deployed at:", address(lzybra));
+        // Step 5: Deploy Zrusd Token
+        Zrusd zrusd = Zrusd(0xD50D59f278bFF077F28d220349a0ea6388519Dfa);
+        console.log("Zrusd deployed at:", address(zrusd));
 
         // Step 6: Deploy MockChainlink Price Feeds
         mockChainlink chainLinkMockUSDC = new mockChainlink();
@@ -516,7 +516,7 @@ contract FullDeployment is Script {
             address(configuratorImplementation),
             abi.encodeWithSelector(
                 ZybraConfigurator.initialize.selector,
-                address(lzybra),
+                address(zrusd),
                 address(usdc)
             )
         );
@@ -536,7 +536,7 @@ contract FullDeployment is Script {
         //     abi.encodeWithSelector(
         //         ZybraVault.initialize.selector,
         //         address(USDC),
-        //         address(lzybra),
+        //         address(zrusd),
         //         address(dotcV2),
         //         address(configurator),
         //         address(ChainLinkMockUSDC),
@@ -548,7 +548,7 @@ contract FullDeployment is Script {
 
         ZybraVault lzybraVault = new ZybraVault(
             address(usdc),
-            address(lzybra),
+            address(zrusd),
             address(dotcV2),
             address(configurator),
             address(chainLinkMockUSDC),
@@ -578,14 +578,14 @@ contract FullDeployment is Script {
             address(chainLinkMockMSCRF),
             bytes32(0x00)
         );
-        lzybra.grantMintRole(address(lzybraVault));
+        zrusd.grantMintRole(address(lzybraVault));
 
         console.log("System fully deployed!");
 
         depositAsset = Asset({
             assetType: AssetType.ERC20, // Assuming assetType 0 represents some standard like ERC20
             assetAddress: address(usdc), // Example deposit asset address
-            amount: defaultPrice, // Example deposit amount
+            amount: 50e6, // Example deposit amount
             tokenId: 0, // No specific tokenId for this asset (since it's not an NFT)
             assetPrice: AssetPrice(address(chainLinkMockUSDC), 0, 0) // Example price feed tuple
         });
@@ -616,198 +616,224 @@ contract FullDeployment is Script {
 
         // Fix: Dynamically initialize the array
         offer = OfferStruct({
-            takingOfferType: TakingOfferType.NoType,
+            takingOfferType: TakingOfferType.NoType, // uint8 value 0
             offerPrice: OfferPrice({
-                offerPricingType: OfferPricingType.FixedPricing,
-                unitPrice: 0,
-                percentage: 100,
-                percentageType: PercentageType.NoType
+                offerPricingType: OfferPricingType.FixedPricing, // value 1
+                unitPrice: 0, // value 0
+                percentage: 100, // value 100
+                percentageType: PercentageType.NoType // value 0
             }),
-            specialAddresses: specialAddress, // Initialize empty array with size 2
-            authorizationAddresses: authorizationAddresses, // Initialize empty array with size 3
-            expiryTimestamp: block.timestamp + 2 days,
-            timelockPeriod: 0,
-            terms: "tbd",
-            commsLink: "tbd"
-        });
-
-        // Repeat the process for the second offer
-
-        offer2 = OfferStruct({
-            takingOfferType: TakingOfferType.NoType,
-            offerPrice: OfferPrice({
-                offerPricingType: OfferPricingType.FixedPricing,
-                unitPrice: 0,
-                percentage: 100,
-                percentageType: PercentageType.NoType
-            }),
-            specialAddresses: specialAddress, // Initialize array with 2 addresses
-            authorizationAddresses: authorizationAddresses, // Initialize array with 2 addresses
-            expiryTimestamp: block.timestamp + 2 days,
-            timelockPeriod: 0,
-            terms: "tbd",
-            commsLink: "tbd"
-        });
-
-        offer3 = OfferStruct({
-            takingOfferType: TakingOfferType.NoType,
-            offerPrice: OfferPrice({
-                offerPricingType: OfferPricingType.FixedPricing,
-                unitPrice: 0,
-                percentage: 100,
-                percentageType: PercentageType.NoType
-            }),
-            specialAddresses: specialAddress, // Initialize array with 2 addresses
-            authorizationAddresses: authorizationAddresses, // Initialize array with 2 addresses
-            expiryTimestamp: block.timestamp + 2 days,
-            timelockPeriod: 0,
-            terms: "tbd",
-            commsLink: "tbd"
+            specialAddresses: new address[](2), // Empty address array of size 2
+            authorizationAddresses: new address[](4), // Empty address array of size 4
+            expiryTimestamp: block.timestamp + 2 days, // timestamp 1741105801
+            timelockPeriod: 0, // value 0
+            terms: "tbd", // string "tbd"
+            commsLink: "tbd" // string "tbd"
         });
 
         console.log("Offers created!");
-           usdc.approve(address(dotcV2), 100000 * 10e18);
-    asset1.approve(address(dotcV2), 100000 * 10e18);
-    asset2.approve(address(dotcV2), 100000 * 10e18);
-    asset3.approve(address(dotcV2), 100000 * 10e18);
-    
-    // Create and make offers in DOTC
-    console.log("Creating offers in DOTC...");
-    dotcV2.makeOffer(withdrawalAsset1, depositAsset, offer);   // OfferId 1
-    dotcV2.makeOffer(withdrawalAsset2, depositAsset, offer2);  // OfferId 2
-    dotcV2.makeOffer(withdrawalAsset3, depositAsset, offer3);  // OfferId 3
-    dotcV2.makeOffer(depositAsset, withdrawalAsset1, offer);   // OfferId 4
-    dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer2);  // OfferId 5
-    dotcV2.makeOffer(depositAsset, withdrawalAsset3, offer3);  // OfferId 6
-    console.log("Created 6 offers in DOTC");
-    
-    // Configure permissions for ZybraVault
-    configurator.setMintVaultMaxSupply(address(lzybraVault), 1000000000e18);
-    lzybra.grantMintRole(address(lzybraVault));
-    lzybra.grantBurnRole(address(lzybraVault));
-    
-    // Setup approvals for ZybraVault
-    usdc.approve(address(lzybraVault), 100000 * 10e18);
-    lzybra.approve(address(lzybraVault), 100000 * 10e18);
-    
-    console.log("\n----- DEPLOYER: Regular deposit with Asset -----");
-    // Deposit using regular deposit method with Asset parameter
-    uint256 depositAmount = 10000 * 10**6; // 10,000 USDC (6 decimals)
-    uint256 mintAmount = 100 * 10**18;    // 100 ZRusd (18 decimals)
-    lzybraVault.deposit(depositAmount, withdrawalAsset1, offer, mintAmount);
-    console.log("Regular deposit completed");
-    
-    console.log("\n----- DEPLOYER1: Deposit with OfferId -----");
-    // Deposit using depositWithOfferId
-    depositAmount = 5000 * 10**6; // 5,000 USDC
-    mintAmount = 50 * 10**18;    // 50 ZRusd
-    uint256 offerId = 1; // Using OfferId 4: depositAsset → withdrawalAsset1
-    
-    // Get basic info about the offer
-    (, , Asset memory offerDepositAsset, Asset memory offerWithdrawalAsset, ) = dotcV2.allOffers(offerId);
-    console.log("Deposit with OfferId:", offerId);
-    console.log("  Deposit asset:", address(offerDepositAsset.assetAddress));
-    console.log("  Withdrawal asset:", address(offerWithdrawalAsset.assetAddress));
-    
-    // Use depositWithOfferId (assuming USDC is the withdraw asset in this offer)
-    bool isDynamic = false;
-    uint256 maxRate = 0; // Not using rate limit for fixed pricing
-    lzybraVault.depositWithOfferId(depositAmount, offerId, mintAmount, isDynamic, maxRate);
-    console.log("Deposit with OfferId completed");
-    
-    console.log("\n----- DEPLOYER: Withdraw with Asset -----");
-    // Check user's asset balance
-    uint256 userVaultAsset1 = lzybraVault.userAssets(deployer, address(asset1));
-    console.log("Current asset1 balance:", userVaultAsset1);
-    
-    // Withdraw using regular withdraw method
-    uint256 withdrawAmount = userVaultAsset1 / 4; // Withdraw 25% of available assets
-    lzybraVault.withdraw(withdrawAmount, offerWithdrawalAsset, offer);
-    console.log("Regular withdrawal completed, withdraw amount:", withdrawAmount);
-    
-    console.log("\n----- DEPLOYER: Withdraw with OfferId -----");
-    // Withdraw using withdrawWithOfferId
-    offerId = 1; // Using OfferId 1: withdrawalAsset1 → depositAsset
-    (, , Asset memory withdrawDepositAsset, Asset memory withdrawWithdrawalAsset, ) = dotcV2.allOffers(offerId);
-    
-    withdrawAmount = userVaultAsset1 / 10; // Withdraw 10% of original balance
-    uint256 burnAmount = 5 * 10**18; // Amount of ZRusd to burn during withdrawal
-    isDynamic = false;
-    maxRate = 0; // Not using rate limit for fixed pricing
-    
-    lzybraVault.withdrawWithOfferId(offerId, withdrawAmount, burnAmount, maxRate, isDynamic);
-    console.log("Withdraw with OfferId completed");
-    
-    vm.stopBroadcast();
-    
-    // Now switch to user account
-    vm.startBroadcast(userPrivateKey);
-    console.log("\n----- USER: Setting up approvals -----");
-    
-    // Setup approvals for user
-    usdc.approve(address(dotcV2), 100000 * 10e18);
-    asset1.approve(address(dotcV2), 100000 * 10e18);
-    asset2.approve(address(dotcV2), 100000 * 10e18);
-    asset3.approve(address(dotcV2), 100000 * 10e18);
-    
-    usdc.approve(address(lzybraVault), 100000 * 10e18);
-    lzybra.approve(address(lzybraVault), 100000 * 10e18);
-    
-    console.log("\n----- USER: Regular deposit with Asset -----");
-    depositAmount = 5000 * 10**6; // 5,000 USDC
-    mintAmount = 50 * 10**18;    // 50 ZRusd
-    lzybraVault.deposit(depositAmount, withdrawalAsset2, offer2, mintAmount);
-    console.log("Regular deposit completed");
-    
-    console.log("\n----- USER: Deposit with OfferId -----");
-    depositAmount = 2500 * 10**6; // 2,500 USDC
-    mintAmount = 25 * 10**18;    // 25 ZRusd
-    offerId = 5; // Using OfferId 5: depositAsset → withdrawalAsset2
-    
-    // Use depositWithOfferId
-    isDynamic = true; // Try dynamic pricing for user
-    maxRate = 0; // 20% above current rate
-    lzybraVault.depositWithOfferId(depositAmount, offerId, mintAmount, isDynamic, maxRate);
-    console.log("Deposit with OfferId completed");
-    
-    console.log("\n----- USER: Withdraw with Asset -----");
-    // Check user's asset balance
-    uint256 userVaultAsset2 = lzybraVault.userAssets(user, address(asset2));
-    console.log("Current asset2 balance:", userVaultAsset2);
-    
-    // Withdraw using regular withdraw method
-    withdrawAmount = userVaultAsset2 / 3; // Withdraw 33% of available assets
-    lzybraVault.withdraw(withdrawAmount, withdrawalAsset2, offer2);
-    console.log("Regular withdrawal completed, withdraw amount:", withdrawAmount);
-    
-    console.log("\n----- USER: Withdraw with OfferId -----");
-    // Withdraw using withdrawWithOfferId
-    offerId = 2; // Using OfferId 2: withdrawalAsset2 → depositAsset
-    
-    withdrawAmount = userVaultAsset2 / 10; // Withdraw 10% of original balance
-    burnAmount = 2 * 10**18; // Amount of ZRusd to burn during withdrawal
-    isDynamic = true;
-    maxRate = 1200 * 10**8; // 20% above current rate
-    
-    lzybraVault.withdrawWithOfferId(offerId, withdrawAmount, burnAmount, maxRate, isDynamic);
-    console.log("Withdraw with OfferId completed");
-    
-    // Clean up test - claim offers
-    console.log("\n----- Claim offers and finalize -----");
-    bytes[] memory emptyBytesArray = new bytes[](1);
-    emptyBytesArray[0] = "";
-    
-    // Claim any pending offers if needed
-    lzybraVault.claimOffer(6, 0, emptyBytesArray);
-    console.log("Claimed offer 6");
-    
-    // Print final balances
-    console.log("\n----- Final balances -----");
-    console.log("User USDC balance:", usdc.balanceOf(user));
-    console.log("User asset2 balance:", asset2.balanceOf(user));
-    console.log("User ZRusd balance:", lzybra.balanceOf(user));
-    
-    vm.stopBroadcast();
+        usdc.approve(address(dotcV2), 100000 * 10e18);
+        asset1.approve(address(dotcV2), 100000 * 10e18);
+        asset2.approve(address(dotcV2), 100000 * 10e18);
+        asset3.approve(address(dotcV2), 100000 * 10e18);
+
+        // Create and make offers in DOTC
+        console.log("Creating offers in DOTC...");
+        dotcV2.makeOffer(withdrawalAsset1, depositAsset, offer); // OfferId 1
+        dotcV2.makeOffer(withdrawalAsset1, depositAsset, offer); // OfferId 1
+        dotcV2.makeOffer(withdrawalAsset2, depositAsset, offer); // OfferId 2
+        dotcV2.makeOffer(withdrawalAsset2, depositAsset, offer); // OfferId 2
+        dotcV2.makeOffer(withdrawalAsset3, depositAsset, offer); // OfferId 3
+        dotcV2.makeOffer(depositAsset, withdrawalAsset1, offer); // OfferId 4
+        dotcV2.makeOffer(depositAsset, withdrawalAsset2, offer); // OfferId 5
+        dotcV2.makeOffer(depositAsset, withdrawalAsset3, offer); // OfferId 6
+        console.log("Created 6 offers in DOTC");
+
+        // Configure permissions for ZybraVault
+        configurator.setMintVaultMaxSupply(address(lzybraVault), 1000000000e18);
+        zrusd.grantMintRole(address(lzybraVault));
+        zrusd.grantBurnRole(address(lzybraVault));
+
+        // Setup approvals for ZybraVault
+        usdc.approve(address(lzybraVault), 100000 * 10e18);
+        zrusd.approve(address(lzybraVault), 100000 * 10e18);
+
+        console.log("\n----- DEPLOYER: Regular deposit with Asset -----");
+        // Deposit using regular deposit method with Asset parameter
+        uint256 depositAmount = 10000 * 10 ** 6; // 10,000 USDC (6 decimals)
+        uint256 mintAmount = 100 * 10 ** 18; // 100 ZRusd (18 decimals)
+        lzybraVault.deposit(depositAmount, withdrawalAsset1, offer, mintAmount);
+        console.log("Regular deposit completed");
+
+        console.log("\n----- DEPLOYER1: Deposit with OfferId -----");
+        // Deposit using depositWithOfferId
+        depositAmount = 10 * 10 ** 18; // 5,000     Asset
+        mintAmount = 5 * 10 ** 18; // 50 ZRusd
+        uint256 offerId = 1; // Using OfferId 4: depositAsset → withdrawalAsset1
+
+        // Get basic info about the offer
+        (
+            ,
+            ,
+            Asset memory offerDepositAsset,
+            Asset memory offerWithdrawalAsset,
+
+        ) = dotcV2.allOffers(offerId);
+        console.log("Deposit with OfferId:", offerId);
+        console.log(
+            "  Deposit asset:",
+            address(offerDepositAsset.assetAddress)
+        );
+        console.log(
+            "  Withdrawal asset:",
+            address(offerWithdrawalAsset.assetAddress)
+        );
+
+        // Use depositWithOfferId (assuming USDC is the withdraw asset in this offer)
+        bool isDynamic = false;
+        uint256 maxRate = 0; // Not using rate limit for fixed pricing
+        vm.stopBroadcast();
+
+        vm.startBroadcast(userPrivateKey);
+
+        usdc.approve(address(lzybraVault), 100000 * 10e18);
+        zrusd.approve(address(lzybraVault), 100000 * 10e18);
+        asset1.approve(address(lzybraVault), 100000 * 10e18);
+        asset2.approve(address(lzybraVault), 100000 * 10e18);
+        asset3.approve(address(lzybraVault), 100000 * 10e18);
+        lzybraVault.depositWithOfferId(
+            depositAmount,
+            offerId,
+            mintAmount,
+            isDynamic,
+            maxRate
+        );
+        depositAmount = 10 * 10 ** 18; // 5,000     Asset
+        mintAmount = 5 * 10 ** 18; // 50 ZRusd
+        offerId = 2; // Using OfferId 4: depositAsset → withdrawalAsset1
+
+        lzybraVault.depositWithOfferId(
+            depositAmount,
+            offerId,
+            mintAmount,
+            isDynamic,
+            maxRate
+        );
+        console.log("Deposit with OfferId completed");
+
+        console.log("\n----- DEPLOYER: Withdraw with Asset -----");
+        // Check user's asset balance
+        uint256 userVaultAsset1 = lzybraVault.userAssets(
+            user,
+            address(asset2)
+        );
+         uint256 userVaultAsset12 = lzybraVault.userAssets(
+            user,
+            address(asset1)
+        );
+          uint256 userVaultAsset22 = lzybraVault.userAssets(
+            user,
+            address(offerWithdrawalAsset.assetAddress)
+        );
+        console2.log("Current asset1 balance:");
+        console2.log(userVaultAsset1);
+        console2.log(userVaultAsset22);
+        console2.log(userVaultAsset12);
+
+        // Withdraw using regular withdraw method
+        uint256 withdrawAmount = userVaultAsset1 / 4; // Withdraw 25% of available assets
+        lzybraVault.withdraw(withdrawAmount, offerDepositAsset, offer);
+        console.log(
+            "Regular withdrawal completed, withdraw amount:",
+            withdrawAmount
+        );
+        console.log("\n----- DEPLOYER: Withdraw with OfferId -----");
+        // Withdraw using withdrawWithOfferId
+        offerId = 4; // Using OfferId 1: withdrawalAsset1 → depositAsset
+        (
+            ,
+            ,
+            Asset memory withdrawDepositAsset,
+            Asset memory withdrawWithdrawalAsset,
+
+        ) = dotcV2.allOffers(offerId);
+
+        withdrawAmount = userVaultAsset1 / 2; // Withdraw 10% of original balance
+        uint256 burnAmount = 2 * 10 ** 18; // Amount of ZRusd to burn during withdrawal
+        isDynamic = false;
+        maxRate = 0; // Not using rate limit for fixed pricing
+
+      
+
+        // Now switch to user account
+        console.log("\n----- USER: Setting up approvals -----");
+
+        // Setup approvals for user
+        usdc.approve(address(dotcV2), 100000 * 10e18);
+        asset1.approve(address(lzybraVault), 100000 * 10e18);
+        asset2.approve(address(lzybraVault), 100000 * 10e18);
+        asset3.approve(address(lzybraVault), 100000 * 10e18);
+
+        usdc.approve(address(lzybraVault), 100000 * 10e18);
+        zrusd.approve(address(lzybraVault), 100000 * 10e18);
+
+        console.log("\n----- USER: Regular deposit with Asset -----");
+        depositAmount = 5000 * 10 ** 6; // 5,000 USDC
+        mintAmount = 50 * 10 ** 18; // 50 ZRusd
+        lzybraVault.deposit(
+            depositAmount,
+            withdrawalAsset2,
+            offer2,
+            mintAmount
+        );
+        console.log("Regular deposit completed");
+
+        console.log("\n----- USER: Deposit with OfferId -----");
+        depositAmount = 10 * 10 ** 18; // 2,500 USDC
+        mintAmount = 15 * 10 ** 18; // 25 ZRusd
+        offerId = 3; // Using OfferId 5: depositAsset → withdrawalAsset2
+        // Use depositWithOfferId
+        isDynamic = false; // Try dynamic pricing for user
+        maxRate = 0; // 20% above current rate
+        lzybraVault.depositWithOfferId(
+            depositAmount,
+            offerId,
+            mintAmount,
+            isDynamic,
+            maxRate
+        );
+        console.log("Deposit with OfferId completed");
+
+        console.log("\n----- USER: Withdraw with Asset -----");
+        // Check user's asset balance
+        uint256 userVaultAsset2 = lzybraVault.userAssets(user, address(asset2));
+        console.log("Current asset2 balance:", userVaultAsset2);
+
+        // Withdraw using regular withdraw method
+        withdrawAmount = userVaultAsset2 / 3; // Withdraw 33% of available assets
+        lzybraVault.withdraw(withdrawAmount, withdrawalAsset2, offer2);
+        console.log(
+            "Regular withdrawal completed, withdraw amount:",
+            withdrawAmount
+        );
+
+      
+        // Clean up test - claim offers
+        console.log("\n----- Claim offers and finalize -----");
+        bytes[] memory emptyBytesArray = new bytes[](1);
+        emptyBytesArray[0] = "";
+
+        // Claim any pending offers if needed
+        // lzybraVault.claimOffer(6, 0, emptyBytesArray);
+        console.log("Claimed offer 6");
+
+        // Print final balances
+        console.log("\n----- Final balances -----");
+        console.log("User USDC balance:", usdc.balanceOf(user));
+        console.log("User asset2 balance:", asset2.balanceOf(user));
+        console.log("User ZRusd balance:", zrusd.balanceOf(user));
+
+        vm.stopBroadcast();
     }
 
     function testrun() external {
@@ -898,9 +924,9 @@ contract FullDeployment is Script {
         console.log("Mint ID NVIDIA:", asset1.balanceOf(deployer));
         console.log("Mint ID MCSF:", asset2.balanceOf(deployer));
         console.log("Mint ID TESLA:", asset3.balanceOf(deployer));
-        // Step 5: Deploy Lzybra Token
-        Lzybra lzybra = new Lzybra("Lzybra", "LZYB");
-        console.log("Lzybra deployed at:", address(lzybra));
+        // Step 5: Deploy Zrusd Token
+        Zrusd zrusd = new Zrusd("Zrusd", "LZYB");
+        console.log("Zrusd deployed at:", address(zrusd));
 
         // Step 6: Deploy MockChainlink Price Feeds
         mockChainlink chainLinkMockUSDC = new mockChainlink();
@@ -941,7 +967,7 @@ contract FullDeployment is Script {
             address(configuratorImplementation),
             abi.encodeWithSelector(
                 ZybraConfigurator.initialize.selector,
-                address(lzybra),
+                address(zrusd),
                 address(usdc)
             )
         );
@@ -961,7 +987,7 @@ contract FullDeployment is Script {
         //     abi.encodeWithSelector(
         //         ZybraVault.initialize.selector,
         //         address(USDC),
-        //         address(lzybra),
+        //         address(zrusd),
         //         address(dotcV2),
         //         address(configurator),
         //         address(ChainLinkMockUSDC),
@@ -973,7 +999,7 @@ contract FullDeployment is Script {
 
         ZybraVault lzybraVault = new ZybraVault(
             address(USDC),
-            address(lzybra),
+            address(zrusd),
             address(dotcV2),
             address(configurator),
             address(ChainLinkMockUSDC),
@@ -993,7 +1019,7 @@ contract FullDeployment is Script {
             address(chainLinkMockMSCRF),
             0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1
         );
-        lzybra.grantMintRole(address(lzybraVault));
+        zrusd.grantMintRole(address(lzybraVault));
 
         console.log("System fully deployed!");
 

@@ -69,7 +69,7 @@ contract StableLzybraSwap is Initializable, UUPSUpgradeable, ReentrancyGuardUpgr
     // --- Minting Functions ---
 
     /**
-     * @dev Mints Lzybra with USDC at a 1:1 rate minus fees, within allowed limits.
+     * @dev Mints Zrusd with USDC at a 1:1 rate minus fees, within allowed limits.
      */
     function mintWithUSDC(uint256 usdcAmount) external validAmount(usdcAmount) nonReentrant {
         usdc.transferFrom(msg.sender, address(this), usdcAmount);
@@ -79,7 +79,7 @@ contract StableLzybraSwap is Initializable, UUPSUpgradeable, ReentrancyGuardUpgr
     }
 
     /**
-     * @dev Mints Lzybra using ETH, converting ETH to USD at the current price, within allowed limits.
+     * @dev Mints Zrusd using ETH, converting ETH to USD at the current price, within allowed limits.
      */
     function mintWithETH() external payable nonReentrant {
         uint256 ethPriceInUsd = _getLatestPrice(ethUsdPriceFeed);
@@ -94,7 +94,7 @@ contract StableLzybraSwap is Initializable, UUPSUpgradeable, ReentrancyGuardUpgr
     // --- Burning Functions ---
 
     /**
-     * @dev Burns Lzybra to receive USDC at a 1:1 rate minus fees, within allowed limits.
+     * @dev Burns Zrusd to receive USDC at a 1:1 rate minus fees, within allowed limits.
      */
     function burnForUSDC(uint256 lzybraAmount) external validAmount(lzybraAmount) nonReentrant {
         uint256 burnAmount = _applyFee(lzybraAmount, burnFeePercent);
@@ -104,7 +104,7 @@ contract StableLzybraSwap is Initializable, UUPSUpgradeable, ReentrancyGuardUpgr
     }
 
     /**
-     * @dev Burns Lzybra to receive ETH, converting USD to ETH at the current price, within allowed limits.
+     * @dev Burns Zrusd to receive ETH, converting USD to ETH at the current price, within allowed limits.
      */
     function burnForETH(uint256 lzybraAmount) external validAmount(lzybraAmount) nonReentrant {
         uint256 ethPriceInUsd = _getLatestPrice(ethUsdPriceFeed);

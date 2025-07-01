@@ -8,7 +8,7 @@ import {FullDeployment} from "../script/Deployer.s.sol";
 import {MockSafe} from "test/mocks/MockSafe.sol";
 import "../src/interfaces/IERC20.sol";
 import {ZybraVault} from "../src/LZybraSwarmVaultV1.sol";
-import {Lzybra} from "../src/token/LZYBRA.sol";
+import {Zrusd} from "../src/token/LZYBRA.sol";
 import "../src/AssetTokenData.sol";
 import {AssetToken} from "../src/AssetToken.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";

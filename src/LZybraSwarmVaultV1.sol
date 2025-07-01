@@ -109,6 +109,22 @@ contract ZybraVault is Ownable, ReentrancyGuard {
         uint256 depositAmount
     );
 
+
+
+    //Errors
+
+     error ZeroAmountNotAllowed();
+    error InvalidOfferId();
+    error InvalidOffer();
+    error WrongAssetType();
+    error NoOraclePriceFeed();
+    error RateExceedsMaximum();
+    error ZeroUsdcAmount();
+    error InsufficientBalance();
+    error InsufficientOfferAmount();
+    error ExcessivePaymentAmount();
+    error InvalidPostOfferState();
+
     modifier onlyExistingAsset(address _asset) {
         Oracles memory oracles = assetOracles[_asset];
         require(
@@ -232,161 +248,162 @@ contract ZybraVault is Ownable, ReentrancyGuard {
      * @param maximumDepositToWithdrawalRate Maximum acceptable rate for dynamic pricing
      * @dev Handles both fixed and dynamic pricing while ensuring proper accounting
      */
-    function depositWithOfferId(
-        uint256 assetAmount,
-        uint256 offerId,
-        uint256 mintAmount,
-        bool isDynamic,
-        uint256 maximumDepositToWithdrawalRate
-    ) external virtual nonReentrant {
-        // Input validation
-        require(assetAmount > 0, "Zero amount not allowed");
-        require(offerId > 0, "Invalid offer ID");
-
-        // Get offer details from DotcV2
-        (
-            address maker,
-            OfferFillType offerFillType,
-            Asset memory depositAsset,
-            Asset memory withdrawalAsset,
-            OfferStruct memory offerDetails
-        ) = dotv2.allOffers(offerId);
-
-        // Validate offer
-        require(maker != address(0), "Offer does not exist");
-        require(offerFillType != OfferFillType.Cancelled, "Offer is cancelled");
-        require(
-            offerFillType != OfferFillType.FullyTaken,
-            "Offer is fully taken"
+function depositWithOfferId(
+    uint256 assetAmount,
+    uint256 offerId,
+    uint256 mintAmount,
+    bool isDynamic,
+    uint256 maximumDepositToWithdrawalRate
+) external virtual nonReentrant {
+    if (assetAmount == 0) revert ZeroAmountNotAllowed();
+    if (offerId == 0) revert InvalidOfferId();
+    
+    // Get offer details from DotcV2 - unavoidable storage read
+    (
+        address maker,
+        OfferFillType offerFillType,
+        Asset memory depositAsset,
+        Asset memory withdrawalAsset,
+        OfferStruct memory offerDetails
+    ) = dotv2.allOffers(offerId);
+    
+    // Perform all validations early to minimize gas costs on failures
+    if (maker == address(0) || 
+        offerFillType == OfferFillType.Cancelled || 
+        offerFillType == OfferFillType.FullyTaken) {
+        revert InvalidOffer();
+    }
+    
+    // Validate asset types (withdrawal asset must be USDC)
+    if (withdrawalAsset.assetAddress != address(usdc_collateralAsset)) {
+        revert WrongAssetType();
+    }
+    
+    // Ensure oracle price feed exists for deposit asset
+    Oracles memory assetOracle = assetOracles[depositAsset.assetAddress];
+    if (assetOracle.chainlink == address(0) && assetOracle.pyth == bytes32(0)) {
+        revert NoOraclePriceFeed();
+    }
+    
+    // Safety check - ensure asset amount doesn't exceed offer capacity
+    if (assetAmount > depositAsset.amount) {
+        revert InsufficientOfferAmount();
+    }
+    
+    // Calculate rate and price - critical for price integrity
+    (uint256 depositToWithdrawalRate,) = dotv2.getRateAndPrice(
+       offerId
+    );
+    
+    // For dynamic pricing, validate rate is within acceptable limits
+    if (isDynamic && maximumDepositToWithdrawalRate > 0 && 
+        depositToWithdrawalRate > maximumDepositToWithdrawalRate) {
+        revert RateExceedsMaximum();
+    }
+    
+    // Calculate USDC payment amount for the requested asset amount
+    uint256 requiredUsdcAmount;
+    
+    if (assetAmount == depositAsset.amount) {
+        // If requesting entire offer, use full withdrawal amount
+        requiredUsdcAmount = withdrawalAsset.amount;
+    } else {
+        // Step 1: Normalize deposit asset amount to 18 decimals for consistent calculation
+        uint256 normalizedAssetAmount = TokenDecimalUtils.normalizeToDecimals18(
+            assetAmount,
+            depositAsset.assetAddress,
+            18 // Default to 18 decimals if metadata call fails
         );
-
-        // Validate asset types
-        require(
-            withdrawalAsset.assetAddress == address(usdc_collateralAsset),
-            "Withdrawal asset must be USDC"
-        );
-
-        // Ensure the deposit asset has oracle price feeds
-        Oracles memory assetOracle = assetOracles[depositAsset.assetAddress];
-        require(
-            assetOracle.chainlink != address(0) ||
-                assetOracle.pyth != bytes32(0),
-            "Asset requires oracle price feed"
-        );
-
-        // Calculate expected exchange rate before asset transfer
-        (uint256 depositToWithdrawalRate, uint256 withdrawalPrice) = AssetHelper
-            .getRateAndPrice(
-                depositAsset,
-                withdrawalAsset,
-                offerDetails.offerPrice
-            );
-
-        // Validate price limit for dynamic pricing
-        if (isDynamic && maximumDepositToWithdrawalRate > 0) {
-            require(
-                depositToWithdrawalRate <= maximumDepositToWithdrawalRate,
-                "Rate exceeds maximum limit"
-            );
-        }
-
-        // Transfer USDC from user to contract
-        bool transferSuccess = usdc_collateralAsset.transferFrom(
-            msg.sender,
-            address(this),
-            assetAmount
-        );
-        require(transferSuccess, "USDC transfer failed");
-
-        // Approve DOTC contract to use our USDC
-        _approveIfNeeded(
-            address(usdc_collateralAsset),
-            address(dotv2),
-            assetAmount
-        );
-
-        uint256 receivedWithdrawalAmount;
-
-        // Take the offer based on pricing type
-        if (isDynamic) {
-            // Save initial deposit asset amount
-            uint256 initialDepositAmount = depositAsset.amount;
-
-            // Take dynamic offer
-            dotv2.takeOfferDynamic(
-                offerId,
-                assetAmount,
-                maximumDepositToWithdrawalRate > 0
-                    ? maximumDepositToWithdrawalRate
-                    : depositToWithdrawalRate,
-                address(this)
-            );
-
-            // Get updated offer state
-            (, , Asset memory newDepositAsset, , ) = dotv2.allOffers(offerId);
-
-            // Calculate received amount based on asset change
-            if (newDepositAsset.amount > initialDepositAmount) {
-                receivedWithdrawalAmount =
-                    newDepositAsset.amount -
-                    initialDepositAmount;
-            } else {
-                // Handle case where amount decreased (shouldn't happen normally)
-                revert("Invalid post-offer asset state");
-            }
-        } else {
-            // Take fixed offer
-            dotv2.takeOfferFixed(offerId, assetAmount, address(this));
-
-            // Calculate received withdrawal amount for fixed rate
-            uint256 scaledRate = TokenDecimalUtils.convertDecimals(
-                depositToWithdrawalRate,
-                8,
-                18
-            );
-            uint256 assetDecimals = 10 **
-                IERC20(depositAsset.assetAddress).decimals();
-
-            // Use fullMulDiv for precise calculation without overflow
-            receivedWithdrawalAmount = assetAmount.fullMulDiv(
-                scaledRate,
-                assetDecimals
-            );
-
-            // Validate result
-            require(receivedWithdrawalAmount > 0, "Zero received amount");
-        }
-
-        // Update user asset balance
-        userAssets[msg.sender][
-            depositAsset.assetAddress
-        ] += receivedWithdrawalAmount;
-
-        // Convert rate to 18 decimals for minting calculation
-        uint256 normalizedRate = TokenDecimalUtils.convertDecimals(
-            depositToWithdrawalRate,
-            8,
+        
+        // Step 2: Convert rate from 8 decimals to 18 decimals
+        uint256 normalizedRate = depositToWithdrawalRate * (10**10);
+        
+        // Step 3: Calculate equivalent value in 18 decimals
+        // normalizedAssetAmount * normalizedRate / 10^18 gives us the value in 18 decimals
+        uint256 normalizedUsdcAmount = TokenDecimalUtils.mulDiv(
+            normalizedAssetAmount,
+            normalizedRate,
             18
         );
-
-        // Validate mint amount if provided
-        if (mintAmount > 0) {
-            // Mint LZYBRA tokens
-            _mintLZYBRA(
-                msg.sender,
-                mintAmount,
-                normalizedRate,
-                depositAsset.assetAddress
-            );
+        
+        // Step 4: Convert from 18 decimals to USDC's 6 decimals
+        requiredUsdcAmount = TokenDecimalUtils.denormalizeFromDecimals18(
+            normalizedUsdcAmount,
+            address(usdc_collateralAsset),
+            6 // USDC has 6 decimals
+        );
+        
+        // Step 5: Round up for precision if there was a remainder
+        uint256 checkBackAmount = TokenDecimalUtils.normalizeToDecimals18(
+            requiredUsdcAmount,
+            address(usdc_collateralAsset),
+            6
+        );
+        
+        if (checkBackAmount < normalizedUsdcAmount) {
+            requiredUsdcAmount++;
         }
-
-        // Emit deposit event with details
-        emit DepositAsset(
+        
+        // Step 6: Safety check - ensure calculated amount doesn't exceed withdrawal asset amount
+        if (requiredUsdcAmount > withdrawalAsset.amount) {
+            requiredUsdcAmount = withdrawalAsset.amount;
+        }
+    }
+    
+    // Ensure calculated amount is valid
+    if (requiredUsdcAmount == 0) revert ZeroUsdcAmount();
+    if (requiredUsdcAmount > withdrawalAsset.amount) revert ExcessivePaymentAmount();
+    
+    // Verify user has enough USDC
+    if (usdc_collateralAsset.balanceOf(msg.sender) < requiredUsdcAmount) revert InsufficientBalance();
+    
+    // CEI Pattern: Effect before interaction
+    // Transfer USDC from user to contract
+    usdc_collateralAsset.transferFrom(msg.sender, address(this), requiredUsdcAmount);
+    
+    // Approve DOTC to use exactly the required amount
+    uint256 currentAllowance = IERC20(address(usdc_collateralAsset)).allowance(address(this), address(dotv2));
+    if (currentAllowance < requiredUsdcAmount) {
+        // Reset allowance to zero first for tokens that require it
+        if (currentAllowance > 0) {
+            IERC20(address(usdc_collateralAsset)).approve(address(dotv2), 0);
+        }
+        IERC20(address(usdc_collateralAsset)).approve(address(dotv2), requiredUsdcAmount);
+    }
+    
+    // Execute offer taking with exact asset amount
+    if (isDynamic) {
+        dotv2.takeOfferDynamic(
+            offerId,
+            assetAmount,
+            maximumDepositToWithdrawalRate > 0
+                ? maximumDepositToWithdrawalRate
+                : depositToWithdrawalRate,
+            address(this)
+        );
+    } else {
+        dotv2.takeOfferFixed(offerId, assetAmount, address(this));
+    }
+    
+    // Update user asset balance with received amount
+    userAssets[msg.sender][depositAsset.assetAddress] += assetAmount;
+    
+    // Mint LZYBRA tokens if requested
+    if (mintAmount > 0) {
+        // Convert depositToWithdrawalRate from 8 to 18 decimals for protocol consistency
+        uint256 normalizedRate = depositToWithdrawalRate * (10**10);
+        
+        _mintLZYBRA(
             msg.sender,
-            depositAsset.assetAddress,
-            receivedWithdrawalAmount
+            mintAmount,
+            normalizedRate,
+            depositAsset.assetAddress
         );
     }
+    
+    // Emit deposit event
+    emit DepositAsset(msg.sender, depositAsset.assetAddress, assetAmount);
+}
 
     /**
      * @notice Withdraw collateral assets to an address
@@ -407,6 +424,7 @@ contract ZybraVault is Ownable, ReentrancyGuard {
         require(assetAmount > 0, "ZA");
         // Transfer collateral to the contract
         uint256 userAsset = userAssets[msg.sender][depositAsset.assetAddress];
+        
         // Ensure user has enough assets to withdraw
         require(userAsset >= assetAmount, "AX");
 
@@ -450,90 +468,112 @@ contract ZybraVault is Ownable, ReentrancyGuard {
      * @dev Withdraw collateral. Check user’s collateral ratio after withdrawal, should be higher than `safeCollateralRatio`
      */
 
-    function withdrawWithOfferId(
-        uint256 offerId,
-        uint256 assetAmount,
-        uint256 burnAmount,
-        uint256 maximumDepositToWithdrawalRate,
-        bool isDynamic
-    ) external virtual nonReentrant {
-        require(assetAmount > 0, "ZA");
-
-        // Get the offer and destructure it properly
-        (
-            ,
-            ,
-            Asset memory depositAsset,
-            Asset memory withdrawalAsset,
-            OfferStruct memory offerDetails
-        ) = dotv2.allOffers(offerId);
-
-        address depositAssetAddr = depositAsset.assetAddress;
-        uint256 userAsset = userAssets[msg.sender][depositAssetAddr];
-
-        // Ensure user has enough assets to withdraw
-        require(userAsset >= assetAmount, "AX.");
-        require(depositAssetAddr == address(usdc_collateralAsset), "AA.");
-
-        // Approve DOTC contract only if needed
-        _approveIfNeeded(depositAssetAddr, address(dotv2), assetAmount);
-
-        (uint256 assetRate, ) = AssetHelper.getRateAndPrice(
-            depositAsset,
-            withdrawalAsset,
-            offerDetails.offerPrice
-        );
-
-        // Check health only if there are borrowed assets
-        if (getBorrowed(msg.sender, depositAssetAddr) > 0) {
-            _checkHealth(msg.sender, depositAssetAddr, assetRate);
-        }
-
-        uint256 receivingAmount;
-        if (isDynamic) {
-            // Dynamic Offer Withdrawal
-            dotv2.takeOfferDynamic(
-                offerId,
-                assetAmount,
-                maximumDepositToWithdrawalRate,
-                msg.sender
-            );
-
-            // Get updated offer state
-            (, , Asset memory newDepositAsset, , ) = dotv2.allOffers(offerId);
-            receivingAmount = depositAsset.amount - newDepositAsset.amount;
-        } else {
-            // Fixed Offer Withdrawal
-            dotv2.takeOfferFixed(offerId, assetAmount, msg.sender);
-            receivingAmount = assetAmount != withdrawalAsset.amount
-                ? depositAsset.unstandardize(
-                    withdrawalAsset.standardize(assetAmount).fullMulDiv(
-                        AssetHelper.BPS,
-                        offerDetails.offerPrice.unitPrice
-                    )
-                )
-                : depositAsset.amount;
-        }
-
-        // Calculate and subtract fees, ensuring valid amount is received
-        uint256 fee = feeStored[msg.sender];
-        require(receivingAmount > fee, "TZA");
-        receivingAmount -= fee;
-
-        // Calculate and repay lzybra based on user's share
-        _repay(msg.sender, msg.sender, depositAssetAddr, burnAmount);
-
-        // Update user balance in storage
-        unchecked {
-            userAssets[msg.sender][depositAssetAddr] = userAsset - assetAmount;
-        }
-
-        // Transfer remaining collateral after fee deduction
-        usdc_collateralAsset.transfer(msg.sender, receivingAmount);
-
-        // Emit withdrawal event with net amount received
-        emit WithdrawAsset(msg.sender, depositAssetAddr, receivingAmount);
+  function withdrawWithOfferId(
+    uint256 offerId,
+    uint256 assetAmount,
+    uint256 burnAmount,
+    uint256 maximumDepositToWithdrawalRate,
+    bool isDynamic
+) external virtual nonReentrant {
+    require(assetAmount > 0, "Zero amount not allowed");
+    
+    
+    // Get the offer details
+    (
+        address maker,
+        OfferFillType offerFillType,
+        Asset memory depositAsset,
+        Asset memory withdrawalAsset,
+        OfferStruct memory offerDetails
+    ) = dotv2.allOffers(offerId);
+    
+    
+    // Validate offer
+    require(
+    maker != address(0) && 
+    offerFillType != OfferFillType.Cancelled && 
+    offerFillType != OfferFillType.FullyTaken && 
+    depositAsset.assetAddress == address(usdc_collateralAsset),
+    "Invalid offer parameters"
+);
+    // Get user's balance of the withdrawal asset (the token they want to sell)
+    address withdrawalAssetAddr = withdrawalAsset.assetAddress;
+    uint256 userAssetBalance = userAssets[msg.sender][withdrawalAssetAddr];
+    
+    
+    // Ensure user has enough assets to withdraw
+    
+    // Calculate expected exchange rate
+    (uint256 assetRate,) = dotv2.getRateAndPrice(
+       offerId
+    );
+    
+    
+    // Check health only if there are borrowed assets
+    if (getBorrowed(msg.sender, withdrawalAssetAddr) > 0) {
+        _checkHealth(msg.sender, withdrawalAssetAddr, assetRate);
     }
+    
+    // Calculate what percentage of the withdrawal asset we want to sell
+    uint256 percentageToSell = assetAmount * 10000 / withdrawalAsset.amount;
+    
+    // Calculate how much USDC we expect to receive for this percentage
+    uint256 expectedUsdcAmount = depositAsset.amount * percentageToSell / 10000;
+    
+    // Safety check for non-zero USDC amount
+    require(expectedUsdcAmount > 0, "Calculated USDC amount is zero");
+    
+    
+    _approveIfNeeded(withdrawalAssetAddr, address(dotv2), assetAmount);
+    
+    uint256 initialDepositAmount = depositAsset.amount;
+    
+    uint256 receivedUsdcAmount;
+    
+    if (isDynamic) {
+        
+        dotv2.takeOfferDynamic(
+            offerId,
+            assetAmount,
+            maximumDepositToWithdrawalRate > 0
+                ? maximumDepositToWithdrawalRate
+                : assetRate,
+            address(this)
+        );
+        
+        (, , Asset memory newDepositAsset, , ) = dotv2.allOffers(offerId);
+        
+        if (initialDepositAmount > newDepositAsset.amount) {
+            receivedUsdcAmount = initialDepositAmount - newDepositAsset.amount;
+        } else {
+            revert("Invalid post-offer asset state");
+        }
+    } else {
+        
+        dotv2.takeOfferFixed(offerId, assetAmount, address(this));
+        
+        (, , Asset memory newDepositAsset, , ) = dotv2.allOffers(offerId);
+        
+        if (initialDepositAmount > newDepositAsset.amount) {
+            receivedUsdcAmount = initialDepositAmount - newDepositAsset.amount;
+        } else {
+            revert("Invalid post-offer asset state");
+        }
+    }
+    
+    uint256 fee = feeStored[msg.sender];
+    require(receivedUsdcAmount > fee, "Fee exceeds received amount");
+    receivedUsdcAmount -= fee;
+    
+    _repay(msg.sender, msg.sender, withdrawalAssetAddr, burnAmount);
+    
+    userAssets[msg.sender][withdrawalAssetAddr] -= assetAmount;
+    
+    usdc_collateralAsset.transfer(msg.sender, receivedUsdcAmount);
+    
+    emit WithdrawAsset(msg.sender, withdrawalAssetAddr, receivedUsdcAmount);
+    
+}
 
     /**
      * @notice Keeper liquidates borrowers whose collateral ratio is below badCollateralRatio, using lzybra provided by Liquidation Provider.
@@ -593,7 +633,7 @@ contract ZybraVault is Ownable, ReentrancyGuard {
         assetDecimals
     );
     
-    // Calculate Lzybra amount with normalized values
+    // Calculate Zrusd amount with normalized values
     uint256 lzybraAmount = normalizedAssetAmount.fullMulDiv(assetPrice, 1e18);
 
     // Initialize variables - keep in native decimals for transfers
@@ -1000,23 +1040,12 @@ contract ZybraVault is Ownable, ReentrancyGuard {
     /**
      * @dev Approve tokens only if allowance is insufficient.
      */
-    function _approveIfNeeded(
-        address asset,
-        address spender,
-        uint256 amount
-    ) internal {
-        uint256 currentAllowance = IERC20(asset).allowance(
-            address(this),
-            spender
-        );
-        if (currentAllowance < amount) {
-            bool success = IERC20(asset).approve(
-                spender,
-                (amount - currentAllowance)
-            );
-            require(success, "AF");
-        }
+    function _approveIfNeeded(address asset, address spender, uint256 amount) internal {
+    uint256 currentAllowance = IERC20(asset).allowance(address(this), spender);
+    if (currentAllowance < amount) {
+        IERC20(asset).approve(spender, type(uint256).max);
     }
+}
 
     /**
      * @dev Returns the current borrowing amount for the user, including borrowed shares and accumulated fees.
@@ -1037,7 +1066,8 @@ contract ZybraVault is Ownable, ReentrancyGuard {
     function _calcShare(uint256 amount, address asset, address user) internal view returns (uint256) {
     uint256 borrowedAmount = borrowed[user][asset];
     uint256 userAssetAmount = userAssets[user][asset];
-    require(userAssetAmount > 0, "USA");
+    if (amount == 0) revert ZeroAmountNotAllowed();
+
 
     // Only normalize for the actual calculation, not for storage
     uint256 assetDecimals = IERC20(asset).decimals();

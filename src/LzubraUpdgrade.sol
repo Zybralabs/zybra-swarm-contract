@@ -555,7 +555,7 @@
 //             "PMA"
 //         );
 
-//         // Calculate Lzybra amount with higher precision
+//         // Calculate Zrusd amount with higher precision
 //         uint256 lzybraAmount = assetAmount.fullMulDiv(assetPrice, 1e18);
 
 //         // Initialize variables

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity 0.8.20;
 
-import { Initializable, Receiver, SafeTransferLib, FixedPointMathLib, IERC721, IERC1155 } from "./exports/ExternalExports.sol";
+import { Initializable, Receiver, SafeTransferLib, FixedPointMathLib, IERC721, IERC1155, IERC165 } from "./exports/ExternalExports.sol";
 
 import { AssetHelper } from "./helpers/AssetHelper.sol";
 import { OfferHelper } from "./helpers/OfferHelper.sol";
@@ -10,22 +10,6 @@ import { DotcEscrowV2 } from "./DotcEscrowV2.sol";
 import { DotcManagerV2 } from "./DotcManagerV2.sol";
 
 import { Asset, AssetType, OfferFillType, OfferStruct, DotcOffer, OnlyManager, OfferPricingType, TakingOfferType } from "./structures/DotcStructuresV2.sol";
-
-
-
-interface IERC165 {
-    /**
-     * @dev Returns true if this contract implements the interface defined by
-     * `interfaceId`. See the corresponding
-     * https://eips.ethereum.org/EIPS/eip-165#how-interfaces-are-identified[EIP section]
-     * to learn more about how these ids are created.
-     *
-     * This function call must use less than 30 000 gas.
-     */
-    function supportsInterface(bytes4 interfaceId) external view returns (bool);
-}
-
-
 
 /// @title Errors related to the Dotc contract
 /// @notice Provides error messages for various failure conditions related to Offers and Assets handling
@@ -66,10 +50,6 @@ error IncorrectOfferPricingType(OfferPricingType incorrectOfferPricingType);
  * ////////////////DISCLAIMER////////////////DISCLAIMER////////////////DISCLAIMER////////////////
  * @author Swarm
  */
-
-
-
-
 contract DotcV2 is Initializable, Receiver {
     /// @dev Used for Safe transfer tokens.
     using SafeTransferLib for address;
@@ -206,7 +186,7 @@ contract DotcV2 is Initializable, Receiver {
 
         depositAsset.checkAssetOwner(msg.sender, depositAsset.amount);
 
-        // offer.checkOfferStructure(depositAsset, withdrawalAsset);
+        offer.checkOfferStructure(depositAsset, withdrawalAsset);
 
         uint256 _currentOfferId = currentOfferId;
 
@@ -233,22 +213,17 @@ contract DotcV2 is Initializable, Receiver {
     function takeOfferFixed(uint256 offerId, uint256 withdrawalAmountPaid, address affiliate) external {
         DotcOffer memory offer = allOffers[offerId];
         offer.checkDotcOfferParams();
-        // offer.offer.checkOfferParams();
+        offer.offer.checkOfferParams();
 
         if (offer.offer.offerPrice.offerPricingType != OfferPricingType.FixedPricing) {
             revert IncorrectOfferPricingType(offer.offer.offerPrice.offerPricingType);
         }
 
-        if (withdrawalAmountPaid == 0 || withdrawalAmountPaid > offer.withdrawalAsset.amount) {
-            withdrawalAmountPaid = offer.withdrawalAsset.amount;
-        }
-
-        if (
-            withdrawalAmountPaid != offer.withdrawalAsset.amount &&
-            offer.offer.takingOfferType == TakingOfferType.BlockOffer
-        ) {
-            revert BlockOfferShouldBePaidFully(withdrawalAmountPaid);
-        }
+        withdrawalAmountPaid = _checkPaidAmount(
+            withdrawalAmountPaid,
+            offer.withdrawalAsset.amount,
+            offer.offer.takingOfferType
+        );
 
         offer.withdrawalAsset.checkAssetOwner(msg.sender, withdrawalAmountPaid);
 
@@ -320,22 +295,11 @@ contract DotcV2 is Initializable, Receiver {
 
         if (maximumDepositToWithdrawalRate == 0) {
             maximumDepositToWithdrawalRate = depositToWithdrawalRate;
-        }
-
-        if (depositToWithdrawalRate > maximumDepositToWithdrawalRate) {
+        } else if (depositToWithdrawalRate > maximumDepositToWithdrawalRate) {
             revert DepositToWithdrawalRateOverflow();
         }
 
-        if (withdrawalAmountPaid == 0 || withdrawalAmountPaid > withdrawalPrice) {
-            withdrawalAmountPaid = withdrawalPrice;
-        }
-
-        if (
-            withdrawalAmountPaid != offer.withdrawalAsset.amount &&
-            offer.offer.takingOfferType == TakingOfferType.BlockOffer
-        ) {
-            revert BlockOfferShouldBePaidFully(withdrawalAmountPaid);
-        }
+        withdrawalAmountPaid = _checkPaidAmount(withdrawalAmountPaid, withdrawalPrice, offer.offer.takingOfferType);
 
         uint256 fullWithdrawalAmountPaid = withdrawalAmountPaid;
 
@@ -466,6 +430,17 @@ contract DotcV2 is Initializable, Receiver {
         escrow = _escrow;
     }
 
+    function getRateAndPrice(
+        uint256 offerId
+    ) external view returns (uint256 depositToWithdrawalRate, uint256 withdrawalPrice) {
+        DotcOffer memory offer = allOffers[offerId];
+
+        (depositToWithdrawalRate, withdrawalPrice) = offer.depositAsset.getRateAndPrice(
+            offer.withdrawalAsset,
+            offer.offer.offerPrice
+        );
+    }
+
     /**
      * @dev Internal function to handle the transfer of different types of assets (ERC20, ERC721, ERC1155).
      * @param asset The asset to be transferred.
@@ -548,5 +523,19 @@ contract DotcV2 is Initializable, Receiver {
             feeAmount,
             manager.revSharePercentage()
         );
+    }
+
+    function _checkPaidAmount(
+        uint256 withdrawalAmountPaid,
+        uint256 withdrawalPrice,
+        TakingOfferType takingOfferType
+    ) internal returns (uint256 toPay) {
+        toPay = withdrawalAmountPaid;
+
+        if (withdrawalAmountPaid == 0 || withdrawalAmountPaid > withdrawalPrice) {
+            toPay = withdrawalPrice;
+        } else if (withdrawalAmountPaid < withdrawalPrice && takingOfferType == TakingOfferType.BlockOffer) {
+            revert BlockOfferShouldBePaidFully(withdrawalAmountPaid);
+        }
     }
 }
