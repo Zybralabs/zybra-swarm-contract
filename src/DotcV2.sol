@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity 0.8.20;
+pragma solidity 0.8.25;
 
 import { Initializable, Receiver, SafeTransferLib, FixedPointMathLib, IERC721, IERC1155, IERC165 } from "./exports/ExternalExports.sol";
 
@@ -31,6 +31,8 @@ error BlockOfferShouldBePaidFully(uint256 withdrawalAmountPaid);
  * 2. If an offer with Dynamic Pricing type, but called takeOfferFixed() function.
  */
 error IncorrectOfferPricingType(OfferPricingType incorrectOfferPricingType);
+
+error InsufficientFundsForERC721(uint256 withdrawalAmountPaid, uint256 withdrawalPrice);
 
 /**
  * @title Open Dotc smart contract (as part of the "SwarmX.eth Protocol")
@@ -306,13 +308,13 @@ contract DotcV2 is Initializable, Receiver {
         offer.withdrawalAsset.checkAssetOwner(msg.sender, withdrawalAmountPaid);
 
         uint256 depositAssetAmount;
-        if (offer.depositAsset.assetType != AssetType.ERC20) {
-            depositAssetAmount = withdrawalAmountPaid.fullMulDiv(offer.depositAsset.amount, withdrawalPrice);
+        if (offer.depositAsset.assetType == AssetType.ERC721) {
+            if (withdrawalAmountPaid < withdrawalPrice) {
+                revert InsufficientFundsForERC721(withdrawalAmountPaid, withdrawalPrice);
+            }
+            depositAssetAmount = 1;
         } else {
-            depositAssetAmount = AssetHelper.calculatePercentage(
-                offer.depositAsset.amount,
-                AssetHelper.getPartPercentage(withdrawalAmountPaid, withdrawalPrice)
-            );
+            depositAssetAmount = withdrawalAmountPaid.fullMulDiv(offer.depositAsset.amount, withdrawalPrice);
         }
         uint256 fullDepositAssetAmount = depositAssetAmount;
 
